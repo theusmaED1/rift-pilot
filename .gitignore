@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+
+# Artefatos de teste
+*.log
+
+# Build PyInstaller
+dist/
+build/
+*.spec.bak
+
+# Gravações de partidas (grandes, geradas localmente)
+recordings/
+
+# IDE
+.vscode/
+.idea/

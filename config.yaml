@@ -1,0 +1,18 @@
+# Configuração do Rift Pilot
+
+tts:
+  voice_path: voices/pt_BR-faber-medium.onnx
+  # Volume e taxa de fala virão aqui em fases futuras
+
+api:
+  base_url: https://127.0.0.1:2999/liveclientdata
+  poll_interval_seconds: 1.0
+
+events:
+  objectives:
+    # Avisar X segundos antes do spawn de cada objetivo
+    warn_seconds: [30, 10]
+
+speaker:
+  # Nunca falar dois avisos com menos de N segundos entre eles
+  min_gap_seconds: 2.0

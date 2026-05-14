@@ -1,0 +1,13 @@
+"""Contrato para acesso aos dados estáticos do Data Dragon."""
+from __future__ import annotations
+
+from typing import Protocol
+
+
+class DataDragonRepository(Protocol):
+    """Resolve nomes/IDs de campeões, itens e runas em pt-BR."""
+
+    def get_champion_id(self, champion_name: str) -> int | None: ...
+    def get_item_names(self) -> dict[int, str]: ...
+    def get_item_prices(self) -> dict[int, int]: ...
+    def get_rune_names(self) -> dict[int, str]: ...
