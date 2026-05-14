@@ -4,7 +4,7 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host "[1/2] Compilando o executavel com PyInstaller..."
-& .venv\Scripts\python.exe -m PyInstaller lol_coach.spec --noconfirm
+& .venv\Scripts\python.exe -m PyInstaller rift_pilot.spec --noconfirm
 if ($LASTEXITCODE -ne 0) {
     Write-Host "PyInstaller falhou."
     exit 1
