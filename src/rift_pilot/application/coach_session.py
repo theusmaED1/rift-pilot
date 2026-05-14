@@ -23,6 +23,7 @@ from rift_pilot.domain.entities.state_diff import StateDiff
 from rift_pilot.domain.ports.game_data_source import (
     GameDataSource,
     GameDataSourceUnavailable,
+    GameLoading,
 )
 from rift_pilot.domain.ports.speech_queue import SpeechQueue
 from rift_pilot.domain.role_inference import resolve_position_for_build_lookup
@@ -33,6 +34,7 @@ from rift_pilot.settings.messages import LogMessages
 class SessionStatus(Enum):
     CONNECTING = auto()
     WAITING_FOR_GAME = auto()
+    LOADING_SCREEN = auto()
     MONITORING = auto()
     GAME_ENDED = auto()
 
@@ -74,6 +76,10 @@ class CoachSession:
         self._skill_detector: SkillPointDetector | None = None
         self._next_item_detector: NextItemDetector | None = None
         self._next_item_lock = threading.Lock()
+        self._pending_build: RecommendedBuild | None = None
+        self._pending_build_lock = threading.Lock()
+        self._game_started = False
+        self._detectors_unlocked = False
 
     def run(self, stop_signal: threading.Event) -> None:
         detectors = self._build_detectors()
@@ -81,11 +87,21 @@ class CoachSession:
         previous_state: GameState | None = None
         consecutive_failures = 0
         is_connected = False
+        loading_screen_signaled = False
         build_fetch_requested = False
+        unlock_deadline: float | None = None
 
         while not stop_signal.is_set():
             try:
                 payload = self._data_source.get_all_data()
+            except GameLoading:
+                consecutive_failures = 0
+                if not loading_screen_signaled:
+                    loading_screen_signaled = True
+                    self._callbacks.on_log_message(LogMessages.LOADING_SCREEN_DETECTED)
+                    self._callbacks.on_status_change(SessionStatus.LOADING_SCREEN)
+                time.sleep(self._poll_interval_seconds)
+                continue
             except GameDataSourceUnavailable:
                 consecutive_failures += 1
                 if (
@@ -104,7 +120,6 @@ class CoachSession:
                 is_connected = True
                 consecutive_failures = 0
                 self._callbacks.on_log_message(LogMessages.GAME_CONNECTED)
-                self._callbacks.on_status_change(SessionStatus.MONITORING)
 
             consecutive_failures = 0
             current_state = GameState.from_live_api(payload)
@@ -125,12 +140,28 @@ class CoachSession:
                     else None,
                 )
 
-            if previous_state is not None:
+            if not self._game_started:
+                self._game_started = True
+                self._callbacks.on_status_change(SessionStatus.MONITORING)
+                unlock_deadline = current_state.game_time_seconds + 10.0
+                with self._pending_build_lock:
+                    if self._pending_build is not None:
+                        if self._options.build_announce and self._pending_build.is_complete:
+                            event = build_announcement_event(self._pending_build)
+                            self._speech_queue.enqueue([event])
+                        self._detectors_unlocked = True
+
+            if not self._detectors_unlocked:
+                if unlock_deadline and current_state.game_time_seconds >= unlock_deadline:
+                    self._detectors_unlocked = True
+
+            if previous_state is not None and self._detectors_unlocked:
                 self._process_tick(previous_state, current_state, detectors)
 
             previous_state = current_state
             time.sleep(self._poll_interval_seconds)
 
+        self._speech_queue.clear()
         self._data_source.close()
 
     # ── Helpers ──────────────────────────────────────────────────────────────
@@ -187,6 +218,11 @@ class CoachSession:
 
     def _handle_build_loaded(self, build: RecommendedBuild) -> None:
         self._callbacks.on_build_loaded(build)
-        if self._options.build_announce and build.is_complete:
-            event = build_announcement_event(build)
-            self._speech_queue.enqueue([event])
+        with self._pending_build_lock:
+            if not self._game_started:
+                self._pending_build = build
+                return
+            if self._options.build_announce and build.is_complete:
+                event = build_announcement_event(build)
+                self._speech_queue.enqueue([event])
+            self._detectors_unlocked = True

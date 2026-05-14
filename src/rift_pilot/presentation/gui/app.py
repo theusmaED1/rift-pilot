@@ -72,8 +72,23 @@ class CoachApp(tk.Tk):
         self._build_header()
         horizontal_separator(self)
         self._status_view = StatusView(self)
-        self._build_view = BuildView(self)
-        FeaturesView(self, self._toggles)
+
+        content = tk.Frame(self, bg=Colors.BACKGROUND_PRIMARY)
+        content.pack(fill="x")
+        content.columnconfigure(0, weight=1)
+        content.columnconfigure(2, weight=1)
+
+        left = tk.Frame(content, bg=Colors.BACKGROUND_PRIMARY)
+        left.grid(row=0, column=0, sticky="nsew")
+
+        tk.Frame(content, bg=Colors.BORDER, width=1).grid(row=0, column=1, sticky="ns")
+
+        right = tk.Frame(content, bg=Colors.BACKGROUND_PRIMARY)
+        right.grid(row=0, column=2, sticky="nsew")
+
+        self._build_view = BuildView(left)
+        FeaturesView(right, self._toggles)
+
         self._build_action_button()
         self._log_view = LogView(self)
         self._build_footer()
@@ -94,17 +109,20 @@ class CoachApp(tk.Tk):
         ).pack(pady=(2, 0))
 
     def _build_action_button(self) -> None:
-        frame = tk.Frame(self, bg=Colors.BACKGROUND_PRIMARY, padx=12, pady=14)
-        frame.pack(fill="x")
+        outer = tk.Frame(self, bg=Colors.BACKGROUND_PRIMARY, pady=14)
+        outer.pack(fill="x")
+        btn_frame = tk.Frame(outer, bg=Colors.GOLD, height=Dimensions.BUTTON_HEIGHT)
+        btn_frame.pack(fill="x", padx=60)
+        btn_frame.pack_propagate(False)
         self._action_button = tk.Button(
-            frame, text=UILabels.BUTTON_START,
+            btn_frame, text=UILabels.BUTTON_START,
             font=Fonts.BUTTON_PRIMARY,
             fg=Colors.BACKGROUND_PRIMARY, bg=Colors.GOLD,
             activebackground=Colors.GOLD_DIM,
-            relief="flat", cursor="hand2", pady=10,
+            relief="flat", cursor="hand2", bd=0,
             command=self._toggle_session,
         )
-        self._action_button.pack(fill="x")
+        self._action_button.pack(fill="both", expand=True)
 
     def _build_footer(self) -> None:
         footer = tk.Frame(self, bg=Colors.BACKGROUND_PRIMARY, pady=8)
@@ -230,6 +248,7 @@ class CoachApp(tk.Tk):
 _STATUS_PRESENTATION: dict[SessionStatus, tuple[str, str]] = {
     SessionStatus.CONNECTING: (UILabels.STATUS_CONNECTING, Colors.GOLD),
     SessionStatus.WAITING_FOR_GAME: (UILabels.STATUS_WAITING_GAME, Colors.TEXT_DIMMED),
+    SessionStatus.LOADING_SCREEN: (UILabels.STATUS_LOADING_SCREEN, Colors.GOLD),
     SessionStatus.MONITORING: (UILabels.STATUS_MONITORING, Colors.ACCENT_GREEN),
     SessionStatus.GAME_ENDED: (UILabels.STATUS_GAME_OVER, Colors.TEXT_DIMMED),
 }

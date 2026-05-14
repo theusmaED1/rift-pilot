@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from rift_pilot.domain.ports.game_data_source import GameDataSourceUnavailable
+from rift_pilot.domain.ports.game_data_source import GameDataSourceUnavailable, GameLoading
 from rift_pilot.settings.constants import Network, Timing
 
 
@@ -24,6 +24,10 @@ class LiveClientDataApi:
             response = self._http.get(f"{Network.LIVE_CLIENT_BASE_URL}/allgamedata")
             response.raise_for_status()
             return response.json()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                raise GameLoading("Jogo ainda carregando.") from exc
+            raise GameDataSourceUnavailable("Live API do LoL inacessível.") from exc
         except (
             httpx.ConnectError,
             httpx.TimeoutException,

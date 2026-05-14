@@ -69,10 +69,9 @@ class TTSMessages:
     }
 
     TRINKET_REMINDERS: list[str] = [
-        "Sua trinket está disponível! Use no mapa!",
-        "Trinket parada! Vai lá usar!",
-        "Você não usa sua trinket faz tempo! Coloca uma ward!",
-        "Trinket disponível! Usa agora!",
+        "Sua trinqueti está disponível! Lembre de usar!",
+        "Trinqueti parada! Vai lá usar!",
+        "Você não usa sua Trinqueti faz tempo!",
     ]
 
     MINIMAP_REMINDERS: list[str] = [
@@ -124,6 +123,7 @@ class UILabels:
     STATUS_WAITING = "Aguardando o jogo iniciar..."
     STATUS_CONNECTING = "Conectando..."
     STATUS_WAITING_GAME = "Aguardando o jogo..."
+    STATUS_LOADING_SCREEN = "Tela de carregamento — buscando build..."
     STATUS_MONITORING = "Monitorando"
     STATUS_GAME_OVER = "Jogo encerrado."
 
@@ -180,6 +180,7 @@ class LogMessages:
     TTS_LOADED = "Módulo TTS: AntonioNeural (pt-BR) carregado."
     WAITING_USER_START = "Aguardando comando para iniciar a sessão."
     GAME_CONNECTED = "● Conectado ao jogo!"
+    LOADING_SCREEN_DETECTED = "◌ Tela de carregamento detectada — buscando build..."
     GAME_ENDED = "— Jogo encerrado."
     CLI_MONITORING = "Monitorando... (Ctrl+C para parar)"
     CLI_STOPPED_BY_USER = "Encerrado."

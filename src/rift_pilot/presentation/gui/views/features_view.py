@@ -107,7 +107,7 @@ class FeaturesView:
             text_frame, text=description,
             font=Fonts.DESCRIPTION,
             fg=Colors.TEXT_DIMMED, bg=Colors.BACKGROUND_CARD,
-            anchor="w", wraplength=240,
+            anchor="w", wraplength=180,
         ).pack(fill="x")
 
         ToggleSwitch(row, variable).pack(side="right", padx=12, pady=10)

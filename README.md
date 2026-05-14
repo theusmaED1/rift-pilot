@@ -1,6 +1,6 @@
 # Rift Pilot
 
-Seu coach de voz em português para **League of Legends**. Lê em voz alta a build recomendada, lembretes de skill, spawns dos objetivos neutros, lembretes do minimapa e quando você acumula ouro suficiente para o próximo item — tudo em tempo real, durante a partida.
+Seu coach de voz em português para **League of Legends**. Lê em voz alta a build recomendada, lembretes de skill, spawns dos objetivos neutros, lembretes do minimapa, lembrete de trinket e quando você acumula ouro suficiente para o próximo item — tudo em tempo real, durante a partida.
 
 Funciona usando apenas a **Live Client Data API oficial** da Riot (endpoint local `127.0.0.1:2999`), sem injeção de código, leitura de memória ou modificação do cliente. Portanto, é **permitido pelos Termos de Serviço** da Riot.
 
@@ -18,13 +18,14 @@ Funciona usando apenas a **Live Client Data API oficial** da Riot (endpoint loca
 
 ## Como usar
 
-1. Entre numa partida de LoL (qualquer modo: normal, ranqueada, ARAM).
-2. Abra o **Rift Pilot**.
-3. Clique em **▶ INICIAR**.
+1. Abra o **Rift Pilot** — pode ser durante o loading screen ou já em partida.
+2. Clique em **▶ INICIAR**.
 
-Quando o app detectar o jogo, carrega automaticamente a build recomendada para o seu campeão na sua lane (extraída do deeplol.gg, tier Emerald+) e começa a anunciar. A janela exibe a build completa em tempo real e mostra um log com tudo que foi anunciado.
+O app detecta automaticamente quando o jogo começa. Se iniciado durante o loading screen, já exibe o status **"Tela de carregamento"** enquanto busca a build em segundo plano — assim que a partida começa, a build é anunciada imediatamente, antes de qualquer outro aviso.
 
-Para parar, clique em **■ PARAR**.
+Quando o jogo terminar, o Rift Pilot para automaticamente e limpa a fila de avisos.
+
+A janela exibe a build completa em tempo real e um log com tudo que foi anunciado.
 
 ---
 
@@ -48,6 +49,9 @@ A cada 2 minutos, fala qual é o **próximo item** a comprar (pulando os que voc
 
 ### ◎ Lembrete do minimapa
 Avisa periodicamente (a cada 45–90 segundos, intervalo variado) para você checar o minimapa, com frases curtas e imperativas.
+
+### ◈ Lembrete de trinket
+Quando sua trinket está com carga disponível há mais de 1 minuto sem uso, o coach avisa para você usá-la. O lembrete se repete a cada 1 minuto enquanto a trinket continuar parada.
 
 ---
 

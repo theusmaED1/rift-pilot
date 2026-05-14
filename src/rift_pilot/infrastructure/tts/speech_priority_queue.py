@@ -49,6 +49,11 @@ class SpeechPriorityQueue:
                 self._sequence_counter += 1
         self._has_items_event.set()
 
+    def clear(self) -> None:
+        with self._lock:
+            self._heap.clear()
+            self._pending_messages.clear()
+
     def cancel_by_tag(self, tag: str) -> None:
         if not tag:
             return
