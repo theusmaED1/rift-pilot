@@ -38,4 +38,4 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host ""
 Write-Host "OK - executavel:  dist\rift-pilot.exe"
-Write-Host "OK - instalador: dist\installer\RiftPilot-Setup-0.1.0-beta.exe"
+Write-Host "OK - instalador: dist\installer\RiftPilot-Setup-0.2.0-beta.exe"
