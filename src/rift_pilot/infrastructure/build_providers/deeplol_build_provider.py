@@ -15,7 +15,10 @@ _POSITION_TO_DEEPLOL_LANE: dict[str, str] = {
     "UTILITY": "Support",
 }
 
-_LANE_FALLBACK_ORDER: tuple[str, ...] = ("Top", "Middle", "Adc", "Support", "Jungle")
+# Alguns campeões (ex: Alistar) têm a chave "Supporter" em vez de "Support" na API do deeplol.
+_SUPPORT_ALIASES: frozenset[str] = frozenset({"Support", "Supporter"})
+
+_LANE_FALLBACK_ORDER: tuple[str, ...] = ("Top", "Middle", "Adc", "Support", "Supporter", "Jungle")
 
 
 class DeeplolBuildProvider:
@@ -82,9 +85,11 @@ class DeeplolBuildProvider:
 
     @staticmethod
     def _extract_lane(lanes: dict, target_lane: str) -> dict | None:
-        candidate = lanes.get(target_lane) if target_lane else None
-        if candidate and candidate.get("build_lst"):
-            return candidate["build_lst"][0]
+        search_names = _SUPPORT_ALIASES if target_lane in _SUPPORT_ALIASES else {target_lane}
+        for name in search_names:
+            lane_data = lanes.get(name) if name else None
+            if lane_data and lane_data.get("build_lst"):
+                return lane_data["build_lst"][0]
         for lane_name in _LANE_FALLBACK_ORDER:
             lane_data = lanes.get(lane_name)
             if lane_data and lane_data.get("build_lst"):

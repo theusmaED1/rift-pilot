@@ -48,6 +48,12 @@ class DataDragonClient:
     def get_item_prices(self) -> dict[int, int]:
         return {iid: data["price"] for iid, data in self._load_item_data().items()}
 
+    def get_item_purchasable(self) -> dict[int, bool]:
+        return {iid: data.get("purchasable", True) for iid, data in self._load_item_data().items()}
+
+    def get_item_sources(self) -> dict[int, list[int]]:
+        return {iid: data.get("from_ids", []) for iid, data in self._load_item_data().items()}
+
     # ── Runas ────────────────────────────────────────────────────────────────
 
     def get_rune_names(self) -> dict[int, str]:
@@ -159,7 +165,12 @@ class DataDragonClient:
         raw_items = response.json()["data"]
 
         items = {
-            int(item_id): {"name": payload["name"], "price": payload["gold"]["total"]}
+            int(item_id): {
+                "name": payload["name"],
+                "price": payload["gold"]["total"],
+                "purchasable": payload["gold"].get("purchasable", True),
+                "from_ids": [int(x) for x in payload.get("from", [])],
+            }
             for item_id, payload in raw_items.items()
         }
         _write_versioned_cache(_ITEM_DATA_FILE, version, items)

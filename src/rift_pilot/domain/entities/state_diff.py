@@ -49,3 +49,12 @@ class StateDiff:
     @property
     def trinket_became_available(self) -> bool:
         return self.current.trinket_available and not self.previous.trinket_available
+
+    @property
+    def trinket_charge_consumed(self) -> bool:
+        """True quando uma carga da trinket foi usada (count diminuiu)."""
+        return self.current.trinket_charges < self.previous.trinket_charges
+
+    @property
+    def gained_item_ids(self) -> frozenset[int]:
+        return self.current.owned_item_ids - self.previous.owned_item_ids

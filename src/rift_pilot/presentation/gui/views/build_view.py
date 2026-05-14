@@ -11,6 +11,7 @@ from rift_pilot.settings.messages import UILabels
 
 _ROWS_DEFINITION = (
     ("starters", UILabels.BUILD_ROW_STARTERS),
+    ("quest", UILabels.BUILD_ROW_QUEST),
     ("core", UILabels.BUILD_ROW_CORE),
     ("boots", UILabels.BUILD_ROW_BOOTS),
     ("skills", UILabels.BUILD_ROW_SKILLS),
@@ -82,6 +83,9 @@ class BuildView:
 
         self._value_labels["starters"].config(
             text=" + ".join(build.starter_items) if build.starter_items else UILabels.BUILD_PLACEHOLDER
+        )
+        self._value_labels["quest"].config(
+            text=build.quest_item_name or UILabels.BUILD_PLACEHOLDER
         )
         self._value_labels["core"].config(
             text=" → ".join(build.core_items) if build.core_items else UILabels.BUILD_PLACEHOLDER

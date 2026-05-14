@@ -69,6 +69,9 @@ class SpeechPriorityQueue:
                 self._heap = survivors
                 heapq.heapify(self._heap)
 
+    # Prioridade mínima para pular o intervalo entre falas (objetivos urgentes).
+    _HIGH_PRIORITY_THRESHOLD = 7
+
     def _run_worker(self) -> None:
         while True:
             self._has_items_event.wait()
@@ -79,5 +82,13 @@ class SpeechPriorityQueue:
                         break
                     _, _, event = heapq.heappop(self._heap)
                     self._pending_messages.discard(event.message)
+
+                if event.expires_at is not None and time.monotonic() > event.expires_at:
+                    continue
+
                 self._speaker.speak(event.message)
-                time.sleep(self._min_gap_seconds)
+
+                with self._lock:
+                    next_priority = -self._heap[0][0] if self._heap else 0
+                if next_priority < self._HIGH_PRIORITY_THRESHOLD:
+                    time.sleep(self._min_gap_seconds)

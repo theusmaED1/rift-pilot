@@ -19,7 +19,11 @@ class Timing:
     MINIMAP_REMINDER_MIN_INTERVAL_SECONDS = 45.0
     MINIMAP_REMINDER_MAX_INTERVAL_SECONDS = 90.0
 
-    TRINKET_REMINDER_IDLE_SECONDS = 60.0
+    TRINKET_REMINDER_IDLE_SECONDS = 220.0
+
+    OBJECTIVE_IMMINENT_EXPIRY_SECONDS = 7.0
+    OBJECTIVE_SOON_EXPIRY_SECONDS = 15.0
+    OBJECTIVE_APPROACHING_EXPIRY_SECONDS = 25.0
 
     HTTP_REQUEST_TIMEOUT_SECONDS = 2.0
     DATA_DRAGON_HTTP_TIMEOUT_SECONDS = 10.0
@@ -72,18 +76,22 @@ class Network:
 
 
 class EventPriority:
-    """Prioridades dos eventos falados (maior = mais urgente)."""
+    """Prioridades dos eventos falados (maior = mais urgente).
+
+    Objetivos são sempre mais urgentes que qualquer feedback de jogo —
+    têm janela de tempo estreita e impacto de equipe.
+    """
 
     BUILD_ANNOUNCE = 9
-    OBJECTIVE_IMMINENT = 8       # 10s ou menos
-    SKILL_GAINED = 7
-    OBJECTIVE_SOON = 7           # 30s
-    NEXT_ITEM_AFFORDABLE = 6
-    OBJECTIVE_APPROACHING = 6    # 60s
+    OBJECTIVE_IMMINENT = 9    # ≤10s: crítico, mesmo nível de build
+    OBJECTIVE_SOON = 8        # 30s
+    OBJECTIVE_APPROACHING = 7 # 60s
+    SKILL_GAINED = 6
+    NEXT_ITEM_AFFORDABLE = 5
     SKILL_REMINDER = 4
     NEXT_ITEM_PERIODIC = 3
-    MINIMAP_REMINDER = 3
-    TRINKET_REMINDER = 3
+    MINIMAP_REMINDER = 2
+    TRINKET_REMINDER = 2
 
 
 class EventTags:
@@ -100,4 +108,4 @@ class Defaults:
     EDGE_TTS_VOICE = "pt-BR-AntonioNeural"
     EDGE_TTS_RATE = "+10%"
     MAX_LOG_LINES = 200
-    APP_VERSION = "0.1.0-beta"
+    APP_VERSION = "0.2.0-beta"

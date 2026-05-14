@@ -1,11 +1,12 @@
 """Detecta proximidade de spawn/respawn de dragão, barão e arauto."""
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 
 from rift_pilot.domain.entities.coach_event import CoachEvent
 from rift_pilot.domain.entities.state_diff import StateDiff
-from rift_pilot.settings.constants import EventPriority, GameRules
+from rift_pilot.settings.constants import EventPriority, GameRules, Timing
 from rift_pilot.settings.messages import TTSMessages
 
 _INITIAL_SPAWN_SECONDS: dict[str, float] = {
@@ -50,6 +51,16 @@ def _priority_for_offset(offset_seconds: int) -> int:
     return EventPriority.OBJECTIVE_APPROACHING
 
 
+def _expiry_for_offset(offset_seconds: int) -> float:
+    if offset_seconds <= 10:
+        window = Timing.OBJECTIVE_IMMINENT_EXPIRY_SECONDS
+    elif offset_seconds <= 30:
+        window = Timing.OBJECTIVE_SOON_EXPIRY_SECONDS
+    else:
+        window = Timing.OBJECTIVE_APPROACHING_EXPIRY_SECONDS
+    return time.monotonic() + window
+
+
 class ObjectiveDetector:
     """Mantém timers de objetivos neutros e avisa antes do spawn."""
 
@@ -82,7 +93,11 @@ class ObjectiveDetector:
                 message = _MESSAGES_BY_OBJECTIVE.get(timer.name, {}).get(offset)
                 if message:
                     events.append(
-                        CoachEvent(message=message, priority=_priority_for_offset(offset))
+                        CoachEvent(
+                            message=message,
+                            priority=_priority_for_offset(offset),
+                            expires_at=_expiry_for_offset(offset),
+                        )
                     )
 
         for timer in expired:

@@ -52,21 +52,58 @@ class RecommendedBuildService:
             else bundled_priority
         )
 
+        try:
+            item_purchasable = self._data_dragon.get_item_purchasable()
+            item_sources = self._data_dragon.get_item_sources()
+        except Exception:
+            item_purchasable = {}
+            item_sources = {}
+
+        starter_pairs = list(provider_result.starter_items)
+        core_pairs = list(provider_result.core_items)
+        quest_item_id, quest_item_name, quest_intermediate_id = _extract_quest_item(
+            starter_pairs, core_pairs, item_purchasable, item_sources
+        )
+
         return RecommendedBuild(
             champion=champion_name,
             position=position,
-            starter_items=[name for _, name in provider_result.starter_items],
-            core_items=[name for _, name in provider_result.core_items],
+            starter_items=[name for _, name in starter_pairs],
+            core_items=[name for _, name in core_pairs],
             boots=provider_result.boots[1] if provider_result.boots else "",
             runes_primary=provider_result.runes_primary,
             runes_secondary=provider_result.runes_secondary,
             skill_priority=skill_priority,
             skill_sequence=provider_result.skill_sequence,
             source=provider_result.source,
-            starter_item_ids=[iid for iid, _ in provider_result.starter_items],
-            core_item_ids=[iid for iid, _ in provider_result.core_items],
+            starter_item_ids=[iid for iid, _ in starter_pairs],
+            core_item_ids=[iid for iid, _ in core_pairs],
             boots_id=provider_result.boots[0] if provider_result.boots else 0,
+            quest_item_id=quest_item_id,
+            quest_item_name=quest_item_name,
+            quest_intermediate_id=quest_intermediate_id,
         )
+
+
+def _extract_quest_item(
+    starter_pairs: list[tuple[int, str]],
+    core_pairs: list[tuple[int, str]],
+    item_purchasable: dict[int, bool],
+    item_sources: dict[int, list[int]],
+) -> tuple[int, str, int]:
+    """Encontra e remove o item de quest das listas de itens da build.
+
+    Um item de quest é aquele cujo pai direto (from) tem purchasable=False,
+    indicando que é obtido gratuitamente pelo sistema de quest (ex: Dádiva dos Mundos).
+    Retorna (quest_item_id, quest_item_name, quest_intermediate_id) ou (0, "", 0).
+    """
+    for pairs in (starter_pairs, core_pairs):
+        for i, (iid, name) in enumerate(pairs):
+            for from_id in item_sources.get(iid, []):
+                if not item_purchasable.get(from_id, True):
+                    pairs.pop(i)
+                    return iid, name, from_id
+    return 0, "", 0
 
 
 def _derive_skill_priority_from_sequence(skill_sequence: list[int]) -> list[str]:

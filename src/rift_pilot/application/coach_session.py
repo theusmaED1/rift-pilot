@@ -27,8 +27,8 @@ from rift_pilot.domain.ports.game_data_source import (
 )
 from rift_pilot.domain.ports.speech_queue import SpeechQueue
 from rift_pilot.domain.role_inference import resolve_position_for_build_lookup
-from rift_pilot.settings.constants import EventTags, Network
-from rift_pilot.settings.messages import LogMessages
+from rift_pilot.settings.constants import EventPriority, EventTags, Network
+from rift_pilot.settings.messages import LogMessages, TTSMessages
 
 
 class SessionStatus(Enum):
@@ -78,6 +78,8 @@ class CoachSession:
         self._next_item_lock = threading.Lock()
         self._pending_build: RecommendedBuild | None = None
         self._pending_build_lock = threading.Lock()
+        self._current_build: RecommendedBuild | None = None
+        self._quest_announced = False
         self._game_started = False
         self._detectors_unlocked = False
 
@@ -193,6 +195,9 @@ class CoachSession:
             self._speech_queue.cancel_by_tag(EventTags.SKILL)
         if diff.items_changed:
             self._speech_queue.cancel_by_tag(EventTags.NEXT_ITEM)
+            self._check_quest_completion(diff)
+        if (diff.previous.trinket_available and not diff.current.trinket_available) or diff.trinket_charge_consumed:
+            self._speech_queue.cancel_by_tag(EventTags.TRINKET)
 
         coach_events: list[CoachEvent] = []
         for detector in detectors:
@@ -217,6 +222,7 @@ class CoachSession:
             self._next_item_detector = detector
 
     def _handle_build_loaded(self, build: RecommendedBuild) -> None:
+        self._current_build = build
         self._callbacks.on_build_loaded(build)
         with self._pending_build_lock:
             if not self._game_started:
@@ -226,3 +232,26 @@ class CoachSession:
                 event = build_announcement_event(build)
                 self._speech_queue.enqueue([event])
             self._detectors_unlocked = True
+
+    def _check_quest_completion(self, diff: StateDiff) -> None:
+        build = self._current_build
+        if (
+            self._quest_announced
+            or build is None
+            or build.quest_intermediate_id == 0
+            or build.quest_item_id == 0
+        ):
+            return
+        if (
+            build.quest_intermediate_id in diff.gained_item_ids
+            and build.quest_item_id not in diff.current.owned_item_ids
+        ):
+            self._quest_announced = True
+            event = CoachEvent(
+                message=TTSMessages.quest_item_available(build.quest_item_name),
+                priority=EventPriority.BUILD_ANNOUNCE,
+            )
+            self._callbacks.on_log_message(
+                LogMessages.coach_event(diff.current.game_time_seconds, event.message)
+            )
+            self._speech_queue.enqueue([event])

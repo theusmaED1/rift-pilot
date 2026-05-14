@@ -21,12 +21,20 @@ def translate_position(position: str) -> str:
     return _POSITION_NAMES_PT_BR.get(position.upper(), "")
 
 
+def _tts_skill(skill: str) -> str:
+    """Converte o nome da skill para pronúncia clara no TTS pt-BR.
+
+    'E' sozinho é lido como a conjunção; 'É' (acentuado) soa como a letra.
+    """
+    return "É" if skill == "E" else skill
+
+
 class TTSMessages:
     """Mensagens faladas pelo coach via Edge TTS."""
 
     @staticmethod
     def skill_point_with_recommendation(skill: str) -> str:
-        return f"Skill disponível! Upa o {skill} agora!"
+        return f"Skill disponível! Upa o {_tts_skill(skill)} agora!"
 
     @staticmethod
     def skill_point_generic() -> str:
@@ -109,8 +117,16 @@ class TTSMessages:
 
     @staticmethod
     def build_max_order(skill_priority: list[str]) -> str:
-        order = " depois o ".join(skill_priority)
+        order = " depois o ".join(_tts_skill(s) for s in skill_priority)
         return f"Maximize {order}."
+
+    @staticmethod
+    def build_quest_item(item_name: str) -> str:
+        return f"Na quest, escolha: {item_name}."
+
+    @staticmethod
+    def quest_item_available(item_name: str) -> str:
+        return f"Quest completa! Escolha agora: {item_name}!"
 
 
 class UILabels:
@@ -141,6 +157,7 @@ class UILabels:
     BUILD_ROW_BOOTS = ("Botas", "⚡")
     BUILD_ROW_SKILLS = ("Skills", "≡")
     BUILD_ROW_RUNES = ("Runas", "✦")
+    BUILD_ROW_QUEST = ("Quest", "⚙")
 
     FEATURE_SKILL_TITLE = "Pontos de skill disponíveis"
     FEATURE_SKILL_DESCRIPTION = "Avisa quando você sobe de nível e tem skill para evoluir"

@@ -25,6 +25,7 @@ class GameState:
     owned_item_ids: frozenset[int] = field(default_factory=frozenset)
     has_smite: bool = False
     trinket_available: bool = False
+    trinket_charges: int = 0
 
     @classmethod
     def from_live_api(cls, payload: dict[str, Any]) -> GameState:
@@ -45,7 +46,7 @@ class GameState:
                 items = player.get("items", [])
                 owned_item_ids = frozenset(item["itemID"] for item in items)
                 has_smite = _player_has_smite(player.get("summonerSpells", {}))
-                trinket_available = _trinket_is_available(items)
+                trinket_available, trinket_charges = _trinket_state(items)
                 break
 
         return cls(
@@ -59,14 +60,16 @@ class GameState:
             owned_item_ids=owned_item_ids,
             has_smite=has_smite,
             trinket_available=trinket_available,
+            trinket_charges=trinket_charges,
         )
 
 
-def _trinket_is_available(items: list[dict[str, Any]]) -> bool:
+def _trinket_state(items: list[dict[str, Any]]) -> tuple[bool, int]:
+    """Retorna (canUse, charges) da trinket. `count` da API = número de cargas."""
     for item in items:
         if item.get("slot") == _TRINKET_SLOT:
-            return bool(item.get("canUse", False))
-    return False
+            return bool(item.get("canUse", False)), int(item.get("count", 1))
+    return False, 0
 
 
 def _player_has_smite(summoner_spells: dict[str, Any]) -> bool:

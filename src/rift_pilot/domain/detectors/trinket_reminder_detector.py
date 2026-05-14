@@ -25,6 +25,10 @@ class TrinketReminderDetector:
             self._last_reminder_at = None
             return []
 
+        if diff.trinket_charge_consumed:
+            self._available_since = now
+            self._last_reminder_at = None
+
         if self._available_since is None:
             return []
 

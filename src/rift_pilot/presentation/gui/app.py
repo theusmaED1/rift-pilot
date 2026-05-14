@@ -177,6 +177,7 @@ class CoachApp(tk.Tk):
             activebackground=Colors.GOLD_DIM,
         )
         self._status_view.set(UILabels.STATUS_WAITING, Colors.TEXT_DIMMED)
+        self._build_view.reset()
 
     def _run_session(self) -> None:
         data_dragon = DataDragonClient()

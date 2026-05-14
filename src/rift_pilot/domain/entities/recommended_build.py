@@ -39,6 +39,9 @@ class RecommendedBuild:
     starter_item_ids: list[int] = field(default_factory=list)
     core_item_ids: list[int] = field(default_factory=list)
     boots_id: int = 0
+    quest_item_id: int = 0
+    quest_item_name: str = ""
+    quest_intermediate_id: int = 0
 
     @property
     def is_complete(self) -> bool:

@@ -19,6 +19,9 @@ def build_announcement_event(build: RecommendedBuild) -> CoachEvent:
     if build.starter_items:
         parts.append(TTSMessages.build_starters(build.starter_items))
 
+    if build.quest_item_name:
+        parts.append(TTSMessages.build_quest_item(build.quest_item_name))
+
     if build.core_items:
         parts.append(TTSMessages.build_core(build.core_items))
 
