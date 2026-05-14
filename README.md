@@ -84,7 +84,7 @@ pip install -e ".[dev]"
 
 Saída:
 - `dist\rift-pilot.exe` — executável standalone
-- `dist\installer\RiftPilot-Setup-0.1.0-beta.exe` — instalador final
+- `dist\installer\RiftPilot-Setup-0.2.0-beta.exe` — instalador final
 
 ---
 

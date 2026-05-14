@@ -2,7 +2,7 @@
 ; Compile com: ISCC.exe setup.iss
 
 #define MyAppName "Rift Pilot"
-#define MyAppVersion "0.1.0-beta"
+#define MyAppVersion "0.2.0-beta"
 #define MyAppPublisher "Matheus Spigariol"
 #define MyAppExeName "rift-pilot.exe"
 
