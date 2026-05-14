@@ -96,6 +96,7 @@ class CoachSession:
         while not stop_signal.is_set():
             try:
                 payload = self._data_source.get_all_data()
+                current_state = GameState.from_live_api(payload)
             except GameLoading:
                 consecutive_failures = 0
                 if not loading_screen_signaled:
@@ -124,7 +125,6 @@ class CoachSession:
                 self._callbacks.on_log_message(LogMessages.GAME_CONNECTED)
 
             consecutive_failures = 0
-            current_state = GameState.from_live_api(payload)
 
             if not build_fetch_requested and current_state.champion_name:
                 build_fetch_requested = True

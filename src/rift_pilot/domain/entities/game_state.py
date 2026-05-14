@@ -6,6 +6,7 @@ from typing import Any
 
 from rift_pilot.domain.entities.abilities import Abilities
 from rift_pilot.domain.entities.game_event import GameEvent
+from rift_pilot.domain.ports.game_data_source import GameLoading
 
 
 _TRINKET_SLOT = 6
@@ -29,7 +30,9 @@ class GameState:
 
     @classmethod
     def from_live_api(cls, payload: dict[str, Any]) -> GameState:
-        active = payload["activePlayer"]
+        active = payload.get("activePlayer", {}) or {}
+        if not {"level", "abilities", "currentGold"}.issubset(active):
+            raise GameLoading("Payload do activePlayer incompleto (modo espectador ou transição).")
         all_players = payload.get("allPlayers", [])
 
         champion_name = ""
