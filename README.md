@@ -125,4 +125,4 @@ python -m rift_pilot.presentation.cli.cli_runner --replay caminho\do\replay.json
 
 ## Licença
 
-MIT.
+MIT License.
