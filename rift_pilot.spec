@@ -1,8 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Gerar com: pyinstaller lol_coach.spec
+# Gerar com: pyinstaller rift_pilot.spec
 
 a = Analysis(
-    ["src/lol_coach/__main__.py"],
+    ["src/rift_pilot/__main__.py"],
     pathex=["src"],
     binaries=[],
     datas=[

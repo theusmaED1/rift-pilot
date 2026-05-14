@@ -10,13 +10,13 @@ import argparse
 import time
 from pathlib import Path
 
-from lol_coach.client.live_api import GameNotRunning, LiveApiClient
-from lol_coach.client.replay import ReplayApiClient
-from lol_coach.events.skill_points import SkillPointDetector
-from lol_coach.events.objectives import ObjectiveDetector
-from lol_coach.state.game_state import GameState, StateDiff
-from lol_coach.speaker.edge_tts import EdgeSpeaker
-from lol_coach.speaker.piper_tts import PiperSpeaker
+from rift_pilot.client.live_api import GameNotRunning, LiveApiClient
+from rift_pilot.client.replay import ReplayApiClient
+from rift_pilot.events.skill_points import SkillPointDetector
+from rift_pilot.events.objectives import ObjectiveDetector
+from rift_pilot.state.game_state import GameState, StateDiff
+from rift_pilot.speaker.edge_tts import EdgeSpeaker
+from rift_pilot.speaker.piper_tts import PiperSpeaker
 
 VOICE_PATH = Path("voices/pt_BR-faber-medium.onnx")
 POLL_INTERVAL = 1.0

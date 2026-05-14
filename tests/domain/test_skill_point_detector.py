@@ -1,7 +1,7 @@
 """Testes do `SkillPointDetector`."""
 
-from lol_coach.domain.detectors.skill_point_detector import SkillPointDetector
-from lol_coach.settings.constants import EventPriority, EventTags
+from rift_pilot.domain.detectors.skill_point_detector import SkillPointDetector
+from rift_pilot.settings.constants import EventPriority, EventTags
 
 
 def test_emits_event_when_player_levels_up(make_state, make_diff):

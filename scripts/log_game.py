@@ -14,8 +14,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from lol_coach.domain.ports.game_data_source import GameDataSourceUnavailable
-from lol_coach.infrastructure.riot.live_client_data_api import LiveClientDataApi
+from rift_pilot.domain.ports.game_data_source import GameDataSourceUnavailable
+from rift_pilot.infrastructure.riot.live_client_data_api import LiveClientDataApi
 
 RECORDINGS_DIR = Path("recordings")
 POLL_INTERVAL = 1.0  # segundos

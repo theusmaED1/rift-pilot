@@ -1,8 +1,8 @@
 """Testes do `build_announcement_event`."""
 
-from lol_coach.domain.detectors.build_announcer import build_announcement_event
-from lol_coach.domain.entities.recommended_build import RecommendedBuild
-from lol_coach.settings.constants import EventPriority
+from rift_pilot.domain.detectors.build_announcer import build_announcement_event
+from rift_pilot.domain.entities.recommended_build import RecommendedBuild
+from rift_pilot.settings.constants import EventPriority
 
 
 def test_announcement_includes_all_sections_when_build_is_complete():

@@ -1,7 +1,7 @@
 """Testes do `ObjectiveDetector` para dragão/barão/arauto."""
 
-from lol_coach.domain.detectors.objective_detector import ObjectiveDetector
-from lol_coach.settings.constants import EventPriority, GameRules
+from rift_pilot.domain.detectors.objective_detector import ObjectiveDetector
+from rift_pilot.settings.constants import EventPriority, GameRules
 
 
 def _advance(detector: ObjectiveDetector, diff_factory, **state_kwargs):

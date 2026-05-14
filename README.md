@@ -89,7 +89,7 @@ Saída:
 ### Estrutura de pastas
 
 ```
-src/lol_coach/
+src/rift_pilot/
 ├── settings/          # Constantes, mensagens pt-BR, loader de config
 ├── domain/            # Regras puras: entidades + detectores + ports (Protocols)
 ├── application/       # Casos de uso: CoachSession, BuildLoader
@@ -114,7 +114,7 @@ Os testes cobrem só o domínio (sem mocks de I/O) — detectores e diffs de est
 python scripts\log_game.py
 
 # Reproduz o replay como se fosse uma partida real (anuncia tudo)
-python -m lol_coach.presentation.cli.cli_runner --replay caminho\do\replay.jsonl
+python -m rift_pilot.presentation.cli.cli_runner --replay caminho\do\replay.jsonl
 ```
 
 ---

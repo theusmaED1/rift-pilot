@@ -5,10 +5,10 @@ from typing import Callable, Iterable
 
 import pytest
 
-from lol_coach.domain.entities.abilities import Abilities
-from lol_coach.domain.entities.game_event import GameEvent
-from lol_coach.domain.entities.game_state import GameState
-from lol_coach.domain.entities.state_diff import StateDiff
+from rift_pilot.domain.entities.abilities import Abilities
+from rift_pilot.domain.entities.game_event import GameEvent
+from rift_pilot.domain.entities.game_state import GameState
+from rift_pilot.domain.entities.state_diff import StateDiff
 
 
 @pytest.fixture

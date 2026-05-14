@@ -1,6 +1,6 @@
 """Testes do `_derive_skill_priority_from_sequence` no `RecommendedBuildService`."""
 
-from lol_coach.infrastructure.recommended_build_service import (
+from rift_pilot.infrastructure.recommended_build_service import (
     _derive_skill_priority_from_sequence,
 )
 

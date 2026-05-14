@@ -23,8 +23,8 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [project.scripts]
-rift-pilot = "lol_coach.presentation.gui.app:run_app"
-rift-pilot-cli = "lol_coach.presentation.cli.cli_runner:main"
+rift-pilot = "rift_pilot.presentation.gui.app:run_app"
+rift-pilot-cli = "rift_pilot.presentation.cli.cli_runner:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

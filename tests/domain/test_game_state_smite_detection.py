@@ -1,6 +1,6 @@
 """Testes da detecção de Punir/Smite em `GameState.from_live_api`."""
 
-from lol_coach.domain.entities.game_state import GameState
+from rift_pilot.domain.entities.game_state import GameState
 
 
 def _payload(spell_one_raw: str, spell_two_raw: str = "") -> dict:

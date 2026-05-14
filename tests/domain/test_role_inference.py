@@ -1,6 +1,6 @@
 """Testes da resolução de posição com base na summoner spell Punir."""
 
-from lol_coach.domain.role_inference import resolve_position_for_build_lookup
+from rift_pilot.domain.role_inference import resolve_position_for_build_lookup
 
 
 def test_player_with_smite_is_treated_as_jungler_even_if_position_says_top():

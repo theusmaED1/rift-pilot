@@ -1,8 +1,8 @@
 """Testes do `MinimapReminderDetector`."""
 
-from lol_coach.domain.detectors.minimap_reminder_detector import MinimapReminderDetector
-from lol_coach.settings.constants import EventPriority, Timing
-from lol_coach.settings.messages import TTSMessages
+from rift_pilot.domain.detectors.minimap_reminder_detector import MinimapReminderDetector
+from rift_pilot.settings.constants import EventPriority, Timing
+from rift_pilot.settings.messages import TTSMessages
 
 
 def test_does_not_fire_before_first_interval(make_state, make_diff):

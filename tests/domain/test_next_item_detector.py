@@ -1,8 +1,8 @@
 """Testes do `NextItemDetector`."""
 
-from lol_coach.domain.detectors.next_item_detector import NextItemDetector
-from lol_coach.domain.entities.recommended_build import RecommendedBuild
-from lol_coach.settings.constants import EventPriority
+from rift_pilot.domain.detectors.next_item_detector import NextItemDetector
+from rift_pilot.domain.entities.recommended_build import RecommendedBuild
+from rift_pilot.settings.constants import EventPriority
 
 
 def _build_with_items() -> RecommendedBuild:
