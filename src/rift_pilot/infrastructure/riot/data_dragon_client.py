@@ -61,6 +61,27 @@ class DataDragonClient:
     def get_item_sources(self) -> dict[int, list[int]]:
         return {iid: data.get("from_ids", []) for iid, data in self._load_item_data().items()}
 
+    def get_item_stats(self) -> dict[int, dict[str, float]]:
+        """Stats brutos do Data Dragon por item (FlatHPPoolMod, etc.).
+
+        Itens não têm o bug de per-level do campeão; item.json `stats` é
+        confiável. Usado pelo StatsEstimator para somar contribuição de itens.
+        """
+        return {iid: data.get("stats", {}) for iid, data in self._load_item_data().items()}
+
+    def get_boots_ids(self) -> set[int]:
+        """IDs de todos os itens com tag 'Boots' (botas base e evoluídas).
+
+        Usado para reconhecer que o jogador já tem alguma bota — não importa
+        qual — e parar de recomendar botas. Vazio se o cache for antigo (sem
+        tags); regenera no próximo patch.
+        """
+        return {
+            iid
+            for iid, data in self._load_item_data().items()
+            if "Boots" in data.get("tags", [])
+        }
+
     # ── Runas ────────────────────────────────────────────────────────────────
 
     def get_rune_names(self) -> dict[int, str]:
@@ -162,6 +183,12 @@ class DataDragonClient:
 
         version = self.get_data_dragon_version()
         cached = _read_versioned_cache(_ITEM_DATA_FILE, version)
+        # Cache de schema antigo (sem "stats") é descartado mesmo na mesma
+        # versão — força refetch pra popular o campo novo.
+        if cached is not None and any(
+            "stats" not in v for v in cached.values()
+        ):
+            cached = None
         if cached is not None:
             self._item_data_cache = {int(k): v for k, v in cached.items()}
             return self._item_data_cache
@@ -177,6 +204,8 @@ class DataDragonClient:
                 "price": payload["gold"]["total"],
                 "purchasable": payload["gold"].get("purchasable", True),
                 "from_ids": [int(x) for x in payload.get("from", [])],
+                "tags": list(payload.get("tags", [])),
+                "stats": payload.get("stats", {}),
             }
             for item_id, payload in raw_items.items()
         }

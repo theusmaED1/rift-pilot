@@ -73,6 +73,7 @@ class CoachSession:
         warn_offsets_seconds: tuple[int, ...] | None = None,
         token_logger: Any | None = None,
         message_provider: Any | None = None,
+        stats_bootstrap: Any | None = None,
     ) -> None:
         self._data_source = data_source
         self._speech_queue = speech_queue
@@ -83,6 +84,8 @@ class CoachSession:
         self._warn_offsets_seconds = warn_offsets_seconds
         self._token_logger = token_logger
         self._message_provider = message_provider
+        self._stats_bootstrap = stats_bootstrap
+        self._stats_tracker: Any | None = None
 
         self._skill_detector: SkillPointDetector | None = None
         self._next_item_detector: NextItemDetector | None = None
@@ -172,6 +175,14 @@ class CoachSession:
                     if self._options.next_item
                     else None,
                 )
+                # Tracking de stats dos 10 — paralelo, não bloqueia a build.
+                if self._stats_bootstrap is not None:
+                    self._stats_bootstrap.fetch_in_background(
+                        payload=payload,
+                        my_champion=current_state.champion_name,
+                        on_ready=self._on_stats_tracker_ready,
+                        on_log=self._callbacks.on_log_message,
+                    )
 
             if not self._game_started:
                 logger.info(f"[CoachSession] Game iniciado! champion={current_state.champion_name}, position={current_state.position}")
@@ -233,6 +244,12 @@ class CoachSession:
             if not self._detectors_unlocked:
                 if unlock_deadline and current_state.game_time_seconds >= unlock_deadline:
                     self._detectors_unlocked = True
+
+            if self._stats_tracker is not None:
+                try:
+                    self._stats_tracker.update(payload)
+                except Exception as e:
+                    logger.warning(f"[CoachSession] stats_tracker.update falhou: {e}")
 
             if previous_state is not None and self._detectors_unlocked:
                 self._process_tick(previous_state, current_state, detectors)
@@ -344,6 +361,11 @@ class CoachSession:
     def _install_next_item_detector(self, detector: NextItemDetector) -> None:
         with self._next_item_lock:
             self._next_item_detector = detector
+
+    def _on_stats_tracker_ready(self, tracker: Any) -> None:
+        """Callback do StatsBootstrap. A partir daqui, update() roda por tick."""
+        self._stats_tracker = tracker
+        logger.info("[CoachSession] PlayerStatsTracker pronto")
 
     def _handle_build_loaded(self, build: RecommendedBuild) -> None:
         logger.info(f"[CoachSession] _handle_build_loaded: {build.champion} - is_complete={build.is_complete}, ai_messages={bool(build.ai_messages)}")

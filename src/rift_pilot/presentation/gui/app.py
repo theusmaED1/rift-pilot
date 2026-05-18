@@ -8,6 +8,7 @@ import tkinter as tk
 from pathlib import Path
 
 from rift_pilot.application.build_loader import BuildLoader
+from rift_pilot.application.stats_bootstrap import StatsBootstrap
 from rift_pilot.application.coach_session import (
     CoachSession,
     SessionCallbacks,
@@ -371,6 +372,7 @@ class CoachApp(tk.Tk):
             warn_offsets_seconds=self._config.objectives.warn_seconds,
             token_logger=token_logger,
             message_provider=message_provider,
+            stats_bootstrap=StatsBootstrap(data_dragon, mcp_client),
         )
         session.run(self._stop_signal)
 
