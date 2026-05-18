@@ -18,12 +18,19 @@ from rift_pilot.domain.entities.recommended_build import RecommendedBuild
 from rift_pilot.infrastructure.build_providers.ai_build_provider import (
     AiBuildProvider,
 )
-from rift_pilot.infrastructure.build_providers.opgg_build_provider import (
-    OpggBuildProvider,
+from rift_pilot.infrastructure.build_providers.ai_message_provider import (
+    AiMessageProvider,
 )
+from rift_pilot.infrastructure.groq.router import GroqRouter
+from rift_pilot.infrastructure.groq.token_logger import TokenLogger
+from rift_pilot.infrastructure.opgg_mcp.client import OpggMcpClient
 from rift_pilot.infrastructure.recommended_build_service import RecommendedBuildService
 from rift_pilot.infrastructure.riot.data_dragon_client import DataDragonClient
 from rift_pilot.infrastructure.riot.live_client_data_api import LiveClientDataApi
+from rift_pilot.infrastructure.secrets.keyring_store import (
+    load_groq_key,
+    save_groq_key,
+)
 from rift_pilot.infrastructure.tts.edge_tts_speaker import EdgeTtsSpeaker
 from rift_pilot.infrastructure.tts.speech_priority_queue import SpeechPriorityQueue
 from rift_pilot.presentation.gui.theme import Colors, Dimensions, Fonts
@@ -50,20 +57,26 @@ class CoachApp(tk.Tk):
         self._stop_signal = threading.Event()
         self._session_thread: threading.Thread | None = None
 
+        # Foco temporário: só "build IA" e "farm" durante a refatoração do modo IA.
+        # Outras features ficam desativadas até a integração progressiva (slots
+        # 4, 5, 6 + lembretes IA) ser finalizada.
         self._toggles = FeatureToggles(
-            skill_points=tk.BooleanVar(value=True),
-            objectives=tk.BooleanVar(value=True),
+            skill_points=tk.BooleanVar(value=False),
+            objectives=tk.BooleanVar(value=False),
             build_announce=tk.BooleanVar(value=True),
             next_item=tk.BooleanVar(value=True),
-            minimap=tk.BooleanVar(value=True),
-            trinket=tk.BooleanVar(value=True),
+            minimap=tk.BooleanVar(value=False),
+            trinket=tk.BooleanVar(value=False),
             farm=tk.BooleanVar(value=True),
-            ai_build=tk.BooleanVar(value=False),
+            ai_build=tk.BooleanVar(value=True),
         )
 
         self._tone_var = tk.StringVar(value=UILabels.CONFIG_TONE_NEUTRAL)
         self._mode_var = tk.StringVar(value=UILabels.CONFIG_MODE_SIMPLE)
-        self._groq_key_var = tk.StringVar(value="")
+        # Carrega chave Groq do keyring (Windows Credential Manager) — fica
+        # mascarada no campo. Usuário cola uma vez, app lembra dali em diante.
+        self._groq_key_var = tk.StringVar(value=load_groq_key())
+        self._saved_groq_key = self._groq_key_var.get()
 
         self._build_ui()
         self._poll_log_queue()
@@ -173,6 +186,8 @@ class CoachApp(tk.Tk):
             UILabels.CONFIG_TONE_NEUTRAL,
             UILabels.CONFIG_TONE_FUNNY,
             UILabels.CONFIG_TONE_SERIOUS,
+            UILabels.CONFIG_TONE_TRYHARD,
+            UILabels.CONFIG_TONE_SARCASTIC,
         )
         tone_menu.config(
             bg=Colors.BACKGROUND_CARD, fg=Colors.TEXT_PRIMARY,
@@ -213,13 +228,39 @@ class CoachApp(tk.Tk):
             font=Fonts.BODY_LABEL,
             fg=Colors.TEXT_PRIMARY, bg=Colors.BACKGROUND_CARD,
         ).pack(side="left")
+
+        # Botão de limpar (remove do keyring)
+        clear_button = tk.Button(
+            key_row, text="Limpar",
+            font=Fonts.FOOTER,
+            fg=Colors.TEXT_DIMMED, bg=Colors.BACKGROUND_CARD,
+            activebackground=Colors.ACCENT_RED_PRESSED,
+            relief="flat", cursor="hand2", bd=0,
+            command=self._clear_groq_key,
+        )
+        clear_button.pack(side="right", padx=(4, 0))
+
         key_entry = tk.Entry(
             key_row, textvariable=self._groq_key_var,
             bg=Colors.BACKGROUND_CARD, fg=Colors.TEXT_PRIMARY,
             insertbackground=Colors.TEXT_PRIMARY,
-            relief="solid", bd=1, width=30, show="*",
+            relief="solid", bd=1, width=26, show="*",
         )
         key_entry.pack(side="right", padx=(8, 0))
+
+        # Indicador visual de "chave salva"
+        if self._saved_groq_key:
+            tk.Label(
+                key_row, text="✓",
+                font=Fonts.BODY_LABEL,
+                fg=Colors.ACCENT_GREEN, bg=Colors.BACKGROUND_CARD,
+            ).pack(side="right", padx=(4, 0))
+
+    def _clear_groq_key(self) -> None:
+        """Remove chave do keyring e limpa o campo."""
+        save_groq_key("")
+        self._groq_key_var.set("")
+        self._saved_groq_key = ""
 
     def _set_window_icon(self) -> None:
         icon_path = Path("icon.ico")
@@ -266,20 +307,40 @@ class CoachApp(tk.Tk):
         data_dragon = DataDragonClient()
         options = self._current_session_options()
 
-        if options.use_ai_build:
-            groq_key = self._groq_key_var.get()
-            # IA adapta builds do OP.GG (não Deeplol)
-            base_provider = OpggBuildProvider(data_dragon=data_dragon)
-            build_provider = AiBuildProvider(
-                base_provider=base_provider,
-                data_dragon=data_dragon,
-                api_key=groq_key,
-                tone=options.tone,
-                mode=options.mode,
+        # Persistir chave Groq no keyring se mudou
+        current_key = self._groq_key_var.get().strip()
+        if current_key and current_key != self._saved_groq_key:
+            save_groq_key(current_key)
+            self._saved_groq_key = current_key
+
+        if not current_key:
+            self._log_queue.put(
+                "⚠ Chave Groq não configurada. Cole sua chave no campo acima "
+                "antes de iniciar."
             )
-        else:
-            # Determinístico: usa OP.GG diretamente (sem adaptação IA)
-            build_provider = OpggBuildProvider(data_dragon=data_dragon)
+            self._handle_status_change(SessionStatus.GAME_ENDED)
+            return
+
+        # TokenLogger compartilhado entre router e CoachSession
+        recordings_dir = Path("recordings")
+        token_logger = TokenLogger(recordings_dir)
+
+        groq_router = GroqRouter(api_key=current_key, token_logger=token_logger)
+        mcp_client = OpggMcpClient()
+
+        build_provider = AiBuildProvider(
+            mcp_client=mcp_client,
+            data_dragon=data_dragon,
+            groq_router=groq_router,
+            tone=options.tone,
+            mode=options.mode,
+        )
+
+        # Message provider gera lembretes/farm via IA (gpt-oss-20b).
+        # Compartilha o mesmo router (e seus contadores de TPD) com o build provider.
+        message_provider = AiMessageProvider(
+            groq_router=groq_router, tone=options.tone
+        )
 
         build_loader = BuildLoader(
             build_service=RecommendedBuildService(
@@ -287,11 +348,9 @@ class CoachApp(tk.Tk):
                 data_dragon=data_dragon,
             ),
             data_dragon=data_dragon,
+            message_provider=message_provider,
         )
-
-        # Injetar AiBuildProvider se em modo IA (para receber dados de inimigos)
-        if options.use_ai_build and isinstance(build_provider, AiBuildProvider):
-            build_loader.set_ai_provider(build_provider)
+        build_loader.set_ai_provider(build_provider)
 
         speaker = EdgeTtsSpeaker()
         speech_queue = SpeechPriorityQueue(
@@ -310,6 +369,8 @@ class CoachApp(tk.Tk):
             ),
             poll_interval_seconds=self._config.api.poll_interval_seconds,
             warn_offsets_seconds=self._config.objectives.warn_seconds,
+            token_logger=token_logger,
+            message_provider=message_provider,
         )
         session.run(self._stop_signal)
 
@@ -319,6 +380,8 @@ class CoachApp(tk.Tk):
             UILabels.CONFIG_TONE_NEUTRAL: "neutral",
             UILabels.CONFIG_TONE_FUNNY: "funny",
             UILabels.CONFIG_TONE_SERIOUS: "serious",
+            UILabels.CONFIG_TONE_TRYHARD: "tryhard",
+            UILabels.CONFIG_TONE_SARCASTIC: "sarcastic",
         }
         tone = tone_map.get(tone_label, "neutral")
 

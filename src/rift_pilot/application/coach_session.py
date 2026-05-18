@@ -71,6 +71,8 @@ class CoachSession:
         callbacks: SessionCallbacks,
         poll_interval_seconds: float,
         warn_offsets_seconds: tuple[int, ...] | None = None,
+        token_logger: Any | None = None,
+        message_provider: Any | None = None,
     ) -> None:
         self._data_source = data_source
         self._speech_queue = speech_queue
@@ -79,6 +81,8 @@ class CoachSession:
         self._callbacks = callbacks
         self._poll_interval_seconds = poll_interval_seconds
         self._warn_offsets_seconds = warn_offsets_seconds
+        self._token_logger = token_logger
+        self._message_provider = message_provider
 
         self._skill_detector: SkillPointDetector | None = None
         self._next_item_detector: NextItemDetector | None = None
@@ -140,20 +144,24 @@ class CoachSession:
 
             consecutive_failures = 0
 
+            # Sempre resolver a posição (inferindo por exclusão se a Live API
+            # retorna NONE para o active player mas preenche aliados).
+            resolved_position = resolve_position_for_build_lookup(
+                current_state.position,
+                current_state.has_smite,
+                team_positions=current_state.all_player_positions,
+            )
+
             if not build_fetch_requested and current_state.champion_name:
                 build_fetch_requested = True
 
                 # Injetar dados de inimigos para modo IA
                 if self._options.use_ai_build:
-                    lane_enemy = self._extract_lane_enemy(payload, current_state)
+                    lane_enemy = self._extract_lane_enemy(
+                        payload, current_state, resolved_position
+                    )
                     full_comp = self._extract_enemy_comp(payload, current_state)
                     self._build_loader.inject_enemies(lane_enemy, full_comp)
-
-                resolved_position = resolve_position_for_build_lookup(
-                    current_state.position,
-                    current_state.has_smite,
-                    team_positions=current_state.all_player_positions,
-                )
                 self._build_loader.fetch_in_background(
                     champion_name=current_state.champion_name,
                     position=resolved_position,
@@ -180,11 +188,12 @@ class CoachSession:
                     )
                 ]
 
-                # Anunciar campeão, lane e starter items
+                # Anunciar campeão e lane (usa a posição resolvida).
                 champion_name = current_state.champion_name or "Campeão desconhecido"
                 champion_msg = f"Jogando de {champion_name}"
-                if current_state.position and current_state.position != "NONE":
-                    champion_msg += f" na {self._position_name(current_state.position)}"
+                announce_position = resolved_position or current_state.position
+                if announce_position and announce_position != "NONE":
+                    champion_msg += f" na {self._position_name(announce_position)}"
                 startup_events.append(
                     CoachEvent(
                         message=champion_msg,
@@ -210,13 +219,12 @@ class CoachSession:
                             startup_events.append(event)
                         self._detectors_unlocked = True
                     else:
-                        # Build ainda não carregou — anuncia aviso
-                        logger.warning(f"[CoachSession] Pending build é None, anunciando aviso de carregamento")
-                        startup_events.append(
-                            CoachEvent(
-                                message="Carregando build recomendada...",
-                                priority=EventPriority.BUILD_ANNOUNCE,
-                            )
+                        # Build ainda não chegou da IA — anúncio sairá em
+                        # _handle_build_loaded quando ela chegar. Não enfileira
+                        # mensagem de "carregando" para não ocupar a fila de fala.
+                        logger.info(
+                            "[CoachSession] Build ainda em andamento — anúncio "
+                            "sairá quando _handle_build_loaded for chamado"
                         )
 
                 logger.info(f"[CoachSession] Enfileirando {len(startup_events)} startup events")
@@ -243,6 +251,11 @@ class CoachSession:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self._log_path = self._recordings_dir / f"game_{timestamp}.jsonl"
         self._log_file = self._log_path.open("w", encoding="utf-8")
+        if self._token_logger is not None:
+            try:
+                self._token_logger.start_game(timestamp)
+            except Exception as e:
+                logger.warning(f"[CoachSession] Falha ao iniciar TokenLogger: {e}")
 
     def _log_game_tick(self, payload: dict[str, Any]) -> None:
         """Log a single game tick."""
@@ -261,6 +274,11 @@ class CoachSession:
                 self._log_file.close()
             except Exception:
                 pass
+        if self._token_logger is not None:
+            try:
+                self._token_logger.end_game()
+            except Exception:
+                pass
 
     def _build_detectors(self) -> list[EventDetector]:
         detectors: list[EventDetector] = []
@@ -276,7 +294,12 @@ class CoachSession:
         if self._options.trinket:
             detectors.append(TrinketReminderDetector())
         if self._options.farm:
-            detectors.append(FarmDetector(tone=self._options.tone))
+            detectors.append(
+                FarmDetector(
+                    tone=self._options.tone,
+                    mode=self._options.mode,
+                )
+            )
         return detectors
 
     def _process_tick(
@@ -294,6 +317,11 @@ class CoachSession:
             self._check_quest_completion(diff)
         if (diff.previous.trinket_available and not diff.current.trinket_available) or diff.trinket_charge_consumed:
             self._speech_queue.cancel_by_tag(EventTags.TRINKET)
+        # Farm é reavaliado a cada tick. Cancela qualquer farm pendente ainda
+        # não falado: se o jogador recuperou o CS, nenhum novo evento de farm
+        # é emitido e o antigo (já obsoleto) some. Com o cooldown de 120s há
+        # ≤1 farm em voo, então o cancel é barato.
+        self._speech_queue.cancel_by_tag(EventTags.FARM)
 
         coach_events: list[CoachEvent] = []
         for detector in detectors:
@@ -390,10 +418,25 @@ class CoachSession:
         }
         return names.get(position, position)
 
-    def _extract_lane_enemy(self, payload: dict[str, Any], state: GameState) -> dict[str, Any] | None:
-        """Extrai o campeão inimigo de mesma posição do payload da Live API."""
-        if not state.position or state.position == "NONE":
-            logger.warning(f"[CoachSession] extract_lane_enemy: position inválida ({state.position})")
+    def _extract_lane_enemy(
+        self,
+        payload: dict[str, Any],
+        state: GameState,
+        resolved_position: str = "",
+    ) -> dict[str, Any] | None:
+        """Extrai o campeão inimigo de mesma posição do payload da Live API.
+
+        Usa `resolved_position` (vindo de `resolve_position_for_build_lookup`)
+        em vez de `state.position` cru — a Live API às vezes deixa a posição
+        do active player como NONE, mas preenche dos aliados, permitindo
+        inferência por exclusão.
+        """
+        my_position = resolved_position or state.position
+        if not my_position or my_position == "NONE":
+            logger.warning(
+                f"[CoachSession] extract_lane_enemy: position inválida "
+                f"(state={state.position!r}, resolved={resolved_position!r})"
+            )
             return None
 
         all_players = payload.get("allPlayers", [])
@@ -412,7 +455,7 @@ class CoachSession:
                 my_team = p.get("team")
                 break
 
-        logger.info(f"[CoachSession] extract_lane_enemy: my_team={my_team}, my_position={state.position}")
+        logger.info(f"[CoachSession] extract_lane_enemy: my_team={my_team}, my_position={my_position}")
         if my_team is None:
             logger.warning(f"[CoachSession] Não conseguiu encontrar meu time no allPlayers")
             return None
@@ -423,7 +466,7 @@ class CoachSession:
             player_pos = player.get("position")
             logger.debug(f"[CoachSession]   player: team={player_team}, pos={player_pos}, champ={player.get('championName')}")
 
-            if (player_team and player_team != my_team and player_pos == state.position):
+            if (player_team and player_team != my_team and player_pos == my_position):
                 enemy = {
                     "championName": player.get("championName", "?"),
                     "level": player.get("level", 0),
@@ -431,7 +474,7 @@ class CoachSession:
                 logger.info(f"[CoachSession] Lane enemy encontrado: {enemy}")
                 return enemy
 
-        logger.warning(f"[CoachSession] Nenhum inimigo de lane encontrado para posição {state.position}")
+        logger.warning(f"[CoachSession] Nenhum inimigo de lane encontrado para posição {my_position}")
         return None
 
     def _extract_enemy_comp(self, payload: dict[str, Any], state: GameState) -> list[dict[str, Any]]:
