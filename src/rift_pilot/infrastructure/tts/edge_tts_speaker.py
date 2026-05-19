@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import asyncio
 import ctypes
+import logging
 import tempfile
 from pathlib import Path
 
 import edge_tts
 
 from rift_pilot.settings.constants import Defaults
+
+logger = logging.getLogger(__name__)
 
 
 class EdgeTtsSpeaker:
@@ -27,11 +30,17 @@ class EdgeTtsSpeaker:
         self._rate = rate
 
     def speak(self, text: str) -> None:
+        logger.info(f"[EdgeTtsSpeaker] Iniciando síntese: {text[:60]}...")
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
             audio_path = Path(tmp.name)
         try:
+            logger.info(f"[EdgeTtsSpeaker] Sintetizando para {audio_path}...")
             asyncio.run(self._synthesize_to_file(text, str(audio_path)))
+            logger.info(f"[EdgeTtsSpeaker] Síntese concluída, tocando áudio...")
             _play_mp3_synchronously(audio_path)
+            logger.info(f"[EdgeTtsSpeaker] Áudio tocado com sucesso")
+        except Exception as e:
+            logger.error(f"[EdgeTtsSpeaker] Erro ao sintetizar/tocar: {e}", exc_info=True)
         finally:
             audio_path.unlink(missing_ok=True)
 

@@ -1,12 +1,16 @@
 """Serviço que combina BuildProvider + fallback estático em uma RecommendedBuild."""
 from __future__ import annotations
 
+import logging
+
 from rift_pilot.domain.entities.recommended_build import RecommendedBuild
 from rift_pilot.domain.ports.build_provider import BuildProvider
 from rift_pilot.domain.ports.data_dragon_repository import DataDragonRepository
 from rift_pilot.infrastructure.build_providers.fallback_skill_priorities import (
     fallback_skill_priority,
 )
+
+logger = logging.getLogger(__name__)
 
 _SKILL_NAME_BY_CODE = {1: "Q", 2: "W", 3: "E"}
 
@@ -31,14 +35,22 @@ class RecommendedBuildService:
         champion_name: str,
         position: str,
     ) -> RecommendedBuild | None:
+        logger.info(f"[RecommendedBuildService] fetch_for_champion: {champion_name} ({position})")
+
         champion_id = self._data_dragon.get_champion_id(champion_name)
+        logger.info(f"[RecommendedBuildService] get_champion_id('{champion_name}') = {champion_id}")
         if not champion_id:
+            logger.warning(f"[RecommendedBuildService] Champion ID não encontrado para {champion_name}")
             return None
 
+        logger.info(f"[RecommendedBuildService] Chamando build_provider.fetch({champion_id}, {position})")
         provider_result = self._build_provider.fetch(champion_id, position)
+        logger.info(f"[RecommendedBuildService] build_provider.fetch retornou: {provider_result}")
+
         bundled_priority = fallback_skill_priority(champion_name)
 
         if provider_result is None:
+            logger.info(f"[RecommendedBuildService] provider_result é None, retornando RecommendedBuild com bundled_priority")
             return RecommendedBuild(
                 champion=champion_name,
                 position=position,
@@ -55,17 +67,21 @@ class RecommendedBuildService:
         try:
             item_purchasable = self._data_dragon.get_item_purchasable()
             item_sources = self._data_dragon.get_item_sources()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"[RecommendedBuildService] Erro ao carregar item_purchasable/sources: {e}")
             item_purchasable = {}
             item_sources = {}
 
         starter_pairs = list(provider_result.starter_items)
         core_pairs = list(provider_result.core_items)
+        logger.info(f"[RecommendedBuildService] starter_pairs={starter_pairs}, core_pairs={core_pairs}")
+
         quest_item_id, quest_item_name, quest_intermediate_id = _extract_quest_item(
             starter_pairs, core_pairs, item_purchasable, item_sources
         )
+        logger.info(f"[RecommendedBuildService] quest_item: {quest_item_name} (id={quest_item_id})")
 
-        return RecommendedBuild(
+        build = RecommendedBuild(
             champion=champion_name,
             position=position,
             starter_items=[name for _, name in starter_pairs],
@@ -82,7 +98,10 @@ class RecommendedBuildService:
             quest_item_id=quest_item_id,
             quest_item_name=quest_item_name,
             quest_intermediate_id=quest_intermediate_id,
+            ai_messages=provider_result.ai_messages,
         )
+        logger.info(f"[RecommendedBuildService] RecommendedBuild criada: {build.champion} - starter={build.starter_items}, core={build.core_items}, boots={build.boots}")
+        return build
 
 
 def _extract_quest_item(

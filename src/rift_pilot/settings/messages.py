@@ -97,6 +97,35 @@ class TTSMessages:
         10: "Larvas vão nascer em 10 segundos. Se prepara!",
     }
 
+    # Farm feedback por tone
+    _FARM_MESSAGES: dict[str, dict[str, str]] = {
+        "funny": {
+            "farm_low": "Bora acordar! Farm tá fraco demais pra esse momento do jogo. Mete a foice nos minions!",
+            "farm_behind": "Ops! Você tá {diff} minions atrás daquele {enemy} chato. Bora recuperar no farm!",
+        },
+        "neutral": {
+            "farm_low": "Farm abaixo do esperado nesse ponto do jogo. Continue focando nos minions.",
+            "farm_behind": "Você está {diff} minions atrás de {enemy}. Prioridade: recuperar no farm.",
+        },
+        "serious": {
+            "farm_low": "Farm crítico. Todos os recursos devem ir para minions neste momento.",
+            "farm_behind": "Déficit crítico: {diff} minions atrás de {enemy}. Prioridade absoluta: farm.",
+        },
+    }
+
+    @staticmethod
+    def farm_low(tone: str = "neutral") -> str:
+        """Alerta de farm geral abaixo do ideal."""
+        msgs = TTSMessages._FARM_MESSAGES.get(tone, TTSMessages._FARM_MESSAGES["neutral"])
+        return msgs.get("farm_low", "Farm abaixo do esperado.")
+
+    @staticmethod
+    def farm_behind(diff_cs: int, enemy_name: str = "inimigo", tone: str = "neutral") -> str:
+        """Alerta de farm atrás do inimigo de lane."""
+        msgs = TTSMessages._FARM_MESSAGES.get(tone, TTSMessages._FARM_MESSAGES["neutral"])
+        template = msgs.get("farm_behind", "Você está atrás no farm.")
+        return template.format(diff=diff_cs, enemy=enemy_name)
+
     @staticmethod
     def build_introduction(champion: str, role: str) -> str:
         if role:
@@ -182,6 +211,23 @@ class UILabels:
     FEATURE_TRINKET_TITLE = "Lembrete de trinket"
     FEATURE_TRINKET_DESCRIPTION = "Avisa quando sua trinket está disponível há mais de 1 minuto"
     FEATURE_TRINKET_ICON = "◈"
+
+    FEATURE_FARM_TITLE = "Feedback de farm"
+    FEATURE_FARM_DESCRIPTION = "Avisa quando seu farm está abaixo do esperado ou atrás do inimigo"
+    FEATURE_FARM_ICON = "◉"
+
+    FEATURE_AI_BUILD_TITLE = "Build por IA (requer chave Groq)"
+    FEATURE_AI_BUILD_DESCRIPTION = "Usa modelo gpt-oss-120b para decisões de build inteligentes"
+    FEATURE_AI_BUILD_ICON = "🤖"
+
+    SECTION_COACH_CONFIG = "CONFIGURAÇÕES DO COACH"
+    CONFIG_TONE_LABEL = "Tom"
+    CONFIG_MODE_LABEL = "Detalhe"
+    CONFIG_TONE_NEUTRAL = "Neutro"
+    CONFIG_TONE_FUNNY = "Engraçado"
+    CONFIG_TONE_SERIOUS = "Sério"
+    CONFIG_MODE_SIMPLE = "Simples"
+    CONFIG_MODE_EXPLANATORY = "Explicativo"
 
     FOOTER_TTS_INFO = "◄)) EDGE TTS — PT-BR-ANTONIONEURAL"
 

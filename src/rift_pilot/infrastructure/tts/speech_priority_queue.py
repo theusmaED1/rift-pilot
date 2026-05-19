@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import heapq
+import logging
 import threading
 import time
 
 from rift_pilot.domain.entities.coach_event import CoachEvent
 from rift_pilot.domain.ports.speaker import Speaker
 from rift_pilot.settings.constants import Timing
+
+logger = logging.getLogger(__name__)
 
 
 class SpeechPriorityQueue:
@@ -73,22 +76,31 @@ class SpeechPriorityQueue:
     _HIGH_PRIORITY_THRESHOLD = 7
 
     def _run_worker(self) -> None:
+        logger.info("[SpeechQueue] Worker thread iniciada")
         while True:
+            logger.debug("[SpeechQueue] Esperando items...")
             self._has_items_event.wait()
             self._has_items_event.clear()
+            logger.info(f"[SpeechQueue] Items disponíveis, processando fila")
             while True:
                 with self._lock:
                     if not self._heap:
+                        logger.debug("[SpeechQueue] Fila vazia")
                         break
                     _, _, event = heapq.heappop(self._heap)
                     self._pending_messages.discard(event.message)
+                    logger.info(f"[SpeechQueue] Próximo evento: {event.message[:60]}...")
 
                 if event.expires_at is not None and time.monotonic() > event.expires_at:
+                    logger.info(f"[SpeechQueue] Evento expirado, pulando")
                     continue
 
+                logger.info(f"[SpeechQueue] Falando: {event.message[:60]}...")
                 self._speaker.speak(event.message)
+                logger.info(f"[SpeechQueue] Fala concluída")
 
                 with self._lock:
                     next_priority = -self._heap[0][0] if self._heap else 0
                 if next_priority < self._HIGH_PRIORITY_THRESHOLD:
+                    logger.debug(f"[SpeechQueue] Aguardando {self._min_gap_seconds}s entre falas")
                     time.sleep(self._min_gap_seconds)

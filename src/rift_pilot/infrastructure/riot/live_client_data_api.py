@@ -40,7 +40,9 @@ class LiveClientDataApi:
         try:
             self.get_all_data()
             return True
-        except GameDataSourceUnavailable:
+        except (GameDataSourceUnavailable, GameLoading):
+            # GameLoading = tela de carregamento (404): ainda não está em
+            # jogo, então segue esperando em vez de estourar o chamador.
             return False
 
     def close(self) -> None:

@@ -40,7 +40,7 @@ class Fonts:
 
 
 class Dimensions:
-    WINDOW_GEOMETRY = "780x720"
+    WINDOW_GEOMETRY = "780x1000"
     TOGGLE_WIDTH = 44
     TOGGLE_HEIGHT = 24
     BADGE_BUILD_SIZE = 30

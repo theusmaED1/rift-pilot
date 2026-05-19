@@ -27,6 +27,9 @@ class GameState:
     has_smite: bool = False
     trinket_available: bool = False
     trinket_charges: int = 0
+    creep_score: int = 0
+    lane_enemy_cs: int | None = None
+    all_player_positions: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_live_api(cls, payload: dict[str, Any]) -> GameState:
@@ -40,7 +43,12 @@ class GameState:
         owned_item_ids: frozenset[int] = frozenset()
         has_smite = False
         trinket_available = False
+        creep_score = 0
+        my_team = ""
         active_riot_id = active.get("riotId") or active.get("summonerName", "")
+
+        # Monta dados do jogador ativo e all_player_positions dos aliados
+        all_player_positions: dict[str, str] = {}
         for player in all_players:
             player_riot_id = player.get("riotId") or player.get("summonerName", "")
             if player_riot_id == active_riot_id:
@@ -50,7 +58,26 @@ class GameState:
                 owned_item_ids = frozenset(item["itemID"] for item in items)
                 has_smite = _player_has_smite(player.get("summonerSpells", {}))
                 trinket_available, trinket_charges = _trinket_state(items)
+                creep_score = int(player.get("scores", {}).get("creepScore", 0))
+                my_team = player.get("team", "")
                 break
+
+        # Extrai posições dos aliados (para inferência de rota)
+        for player in all_players:
+            player_riot_id = player.get("riotId") or player.get("summonerName", "")
+            if player_riot_id != active_riot_id and player.get("team") == my_team:
+                player_pos = player.get("position", "")
+                if player_pos:
+                    all_player_positions[player_riot_id] = player_pos
+
+        # Calcula lane_enemy_cs (CS do inimigo de mesma posição)
+        lane_enemy_cs: int | None = None
+        if position and position != "UTILITY":
+            for player in all_players:
+                if (player.get("team") != my_team and
+                    player.get("position") == position):
+                    lane_enemy_cs = int(player.get("scores", {}).get("creepScore", 0))
+                    break
 
         return cls(
             game_time_seconds=payload["gameData"]["gameTime"],
@@ -64,6 +91,9 @@ class GameState:
             has_smite=has_smite,
             trinket_available=trinket_available,
             trinket_charges=trinket_charges,
+            creep_score=creep_score,
+            lane_enemy_cs=lane_enemy_cs,
+            all_player_positions=all_player_positions,
         )
 
 

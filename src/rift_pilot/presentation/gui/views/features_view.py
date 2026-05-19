@@ -19,6 +19,8 @@ class FeatureToggles:
     next_item: tk.BooleanVar
     minimap: tk.BooleanVar
     trinket: tk.BooleanVar
+    farm: tk.BooleanVar
+    ai_build: tk.BooleanVar
 
 
 class FeaturesView:
@@ -73,6 +75,18 @@ class FeaturesView:
                 UILabels.FEATURE_TRINKET_ICON,
                 UILabels.FEATURE_TRINKET_TITLE,
                 UILabels.FEATURE_TRINKET_DESCRIPTION,
+            ),
+            (
+                toggles.farm,
+                UILabels.FEATURE_FARM_ICON,
+                UILabels.FEATURE_FARM_TITLE,
+                UILabels.FEATURE_FARM_DESCRIPTION,
+            ),
+            (
+                toggles.ai_build,
+                UILabels.FEATURE_AI_BUILD_ICON,
+                UILabels.FEATURE_AI_BUILD_TITLE,
+                UILabels.FEATURE_AI_BUILD_DESCRIPTION,
             ),
         )
 

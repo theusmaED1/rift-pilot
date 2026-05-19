@@ -6,11 +6,12 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class ProviderResult:
-    """Build retornada por um provedor externo (ex.: deeplol.gg).
+    """Build retornada por um provedor externo (ex.: deeplol.gg, op.gg, IA).
 
     Itens vêm como pares `(item_id, nome_localizado)` para que a camada de
     aplicação possa relacionar IDs (preços, inventário) e nomes (TTS).
     `skill_sequence` é a sequência exata por nível: 1=Q, 2=W, 3=E, 4=R.
+    `ai_messages` (opcional, modo IA): mensagens naturais geradas pela IA.
     """
 
     starter_items: list[tuple[int, str]] = field(default_factory=list)
@@ -20,6 +21,8 @@ class ProviderResult:
     runes_secondary: str = ""
     skill_sequence: list[int] = field(default_factory=list)
     source: str = ""
+    ai_messages: dict[str, str] = field(default_factory=dict)
+    # Modo IA: chaves = "starter", "core", "boots"
 
 
 @dataclass(frozen=True)
@@ -42,6 +45,9 @@ class RecommendedBuild:
     quest_item_id: int = 0
     quest_item_name: str = ""
     quest_intermediate_id: int = 0
+    ai_messages: dict[str, str] = field(default_factory=dict)
+    # Modo IA: chaves = "starter", "core", "boots", "next_item", "item_affordable"
+    # Vazio no modo determinístico
 
     @property
     def is_complete(self) -> bool:

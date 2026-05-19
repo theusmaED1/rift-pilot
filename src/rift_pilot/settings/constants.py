@@ -88,8 +88,10 @@ class EventPriority:
     OBJECTIVE_APPROACHING = 7 # 60s
     SKILL_GAINED = 6
     NEXT_ITEM_AFFORDABLE = 5
+    FARM_BEHIND = 5           # atrás do inimigo de lane
     SKILL_REMINDER = 4
     NEXT_ITEM_PERIODIC = 3
+    FARM_LOW = 3              # farm abaixo do ideal
     MINIMAP_REMINDER = 2
     TRINKET_REMINDER = 2
 
@@ -100,6 +102,7 @@ class EventTags:
     SKILL = "skill"
     NEXT_ITEM = "next_item"
     TRINKET = "trinket"
+    FARM = "farm"
 
 
 class Defaults:

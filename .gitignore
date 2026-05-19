@@ -2,22 +2,46 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+src/lol_coach_tts.egg-info/
 build/
 dist/
 .venv/
 venv/
 .pytest_cache/
 
-# Artefatos de teste
-*.log
+# Runtime artifacts (never commit)
+coach_pid.txt
+coach_debug.log
+coach_output.log
+output.log
+rift_pilot.log
+replay_analysis.log
+detector_test.log
+logs/
+
+# Cache
+cache/
+
+# Kokoro TTS model (large binary — download separately)
+kokoro-v*.onnx
+voices-v*.bin
 
 # Build PyInstaller
 dist/
 build/
+*.spec
 *.spec.bak
 
 # Gravações de partidas (grandes, geradas localmente)
 recordings/
+
+# Root-level test/debug scripts (ad-hoc, never commit)
+test_*.py
+debug_*.py
+
+# Data exploration artifacts (never commit)
+*.json
+!config.json
 
 # IDE
 .vscode/

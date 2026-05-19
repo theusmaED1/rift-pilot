@@ -37,6 +37,13 @@ class DataDragonClient:
         info = data["champions"].get(champion_name)
         return info["key"] if info else None
 
+    def get_champion_name(self, champion_id: int) -> str | None:
+        data = self._load_champion_map()
+        for name, info in data["champions"].items():
+            if info["key"] == champion_id:
+                return name
+        return None
+
     def get_data_dragon_version(self) -> str:
         return self._load_champion_map()["version"]
 

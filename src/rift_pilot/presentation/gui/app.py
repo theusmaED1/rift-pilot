@@ -15,8 +15,11 @@ from rift_pilot.application.coach_session import (
 )
 from rift_pilot.application.session_options import SessionOptions
 from rift_pilot.domain.entities.recommended_build import RecommendedBuild
-from rift_pilot.infrastructure.build_providers.deeplol_build_provider import (
-    DeeplolBuildProvider,
+from rift_pilot.infrastructure.build_providers.ai_build_provider import (
+    AiBuildProvider,
+)
+from rift_pilot.infrastructure.build_providers.opgg_build_provider import (
+    OpggBuildProvider,
 )
 from rift_pilot.infrastructure.recommended_build_service import RecommendedBuildService
 from rift_pilot.infrastructure.riot.data_dragon_client import DataDragonClient
@@ -54,7 +57,13 @@ class CoachApp(tk.Tk):
             next_item=tk.BooleanVar(value=True),
             minimap=tk.BooleanVar(value=True),
             trinket=tk.BooleanVar(value=True),
+            farm=tk.BooleanVar(value=True),
+            ai_build=tk.BooleanVar(value=False),
         )
+
+        self._tone_var = tk.StringVar(value=UILabels.CONFIG_TONE_NEUTRAL)
+        self._mode_var = tk.StringVar(value=UILabels.CONFIG_MODE_SIMPLE)
+        self._groq_key_var = tk.StringVar(value="")
 
         self._build_ui()
         self._poll_log_queue()
@@ -88,6 +97,7 @@ class CoachApp(tk.Tk):
 
         self._build_view = BuildView(left)
         FeaturesView(right, self._toggles)
+        self._build_coach_config(right)
 
         self._build_action_button()
         self._log_view = LogView(self)
@@ -138,6 +148,79 @@ class CoachApp(tk.Tk):
             fg=Colors.TEXT_DIMMED, bg=Colors.BACKGROUND_PRIMARY,
         ).pack(side="right", padx=16)
 
+    def _build_coach_config(self, parent: tk.Widget) -> None:
+        outer = tk.Frame(parent, bg=Colors.BACKGROUND_PRIMARY, padx=12)
+        outer.pack(fill="x", pady=(10, 4))
+
+        tk.Label(
+            outer, text=UILabels.SECTION_COACH_CONFIG,
+            font=Fonts.SECTION_HEADER,
+            fg=Colors.GOLD_DIM, bg=Colors.BACKGROUND_PRIMARY,
+        ).pack(anchor="w", pady=(0, 6))
+
+        card = tk.Frame(outer, bg=Colors.BACKGROUND_CARD)
+        card.pack(fill="x")
+
+        tone_row = tk.Frame(card, bg=Colors.BACKGROUND_CARD)
+        tone_row.pack(fill="x", padx=12, pady=8)
+        tk.Label(
+            tone_row, text=UILabels.CONFIG_TONE_LABEL,
+            font=Fonts.BODY_LABEL,
+            fg=Colors.TEXT_PRIMARY, bg=Colors.BACKGROUND_CARD,
+        ).pack(side="left")
+        tone_menu = tk.OptionMenu(
+            tone_row, self._tone_var,
+            UILabels.CONFIG_TONE_NEUTRAL,
+            UILabels.CONFIG_TONE_FUNNY,
+            UILabels.CONFIG_TONE_SERIOUS,
+        )
+        tone_menu.config(
+            bg=Colors.BACKGROUND_CARD, fg=Colors.TEXT_PRIMARY,
+            activebackground=Colors.GOLD_DIM, activeforeground=Colors.TEXT_PRIMARY,
+            relief="solid", bd=1,
+        )
+        tone_menu["menu"].config(bg=Colors.BACKGROUND_CARD, fg=Colors.TEXT_PRIMARY)
+        tone_menu.pack(side="right")
+
+        tk.Frame(card, bg=Colors.BORDER, height=1).pack(fill="x")
+
+        mode_row = tk.Frame(card, bg=Colors.BACKGROUND_CARD)
+        mode_row.pack(fill="x", padx=12, pady=8)
+        tk.Label(
+            mode_row, text=UILabels.CONFIG_MODE_LABEL,
+            font=Fonts.BODY_LABEL,
+            fg=Colors.TEXT_PRIMARY, bg=Colors.BACKGROUND_CARD,
+        ).pack(side="left")
+        mode_menu = tk.OptionMenu(
+            mode_row, self._mode_var,
+            UILabels.CONFIG_MODE_SIMPLE,
+            UILabels.CONFIG_MODE_EXPLANATORY,
+        )
+        mode_menu.config(
+            bg=Colors.BACKGROUND_CARD, fg=Colors.TEXT_PRIMARY,
+            activebackground=Colors.GOLD_DIM, activeforeground=Colors.TEXT_PRIMARY,
+            relief="solid", bd=1,
+        )
+        mode_menu["menu"].config(bg=Colors.BACKGROUND_CARD, fg=Colors.TEXT_PRIMARY)
+        mode_menu.pack(side="right")
+
+        tk.Frame(card, bg=Colors.BORDER, height=1).pack(fill="x")
+
+        key_row = tk.Frame(card, bg=Colors.BACKGROUND_CARD)
+        key_row.pack(fill="x", padx=12, pady=8)
+        tk.Label(
+            key_row, text="Chave Groq",
+            font=Fonts.BODY_LABEL,
+            fg=Colors.TEXT_PRIMARY, bg=Colors.BACKGROUND_CARD,
+        ).pack(side="left")
+        key_entry = tk.Entry(
+            key_row, textvariable=self._groq_key_var,
+            bg=Colors.BACKGROUND_CARD, fg=Colors.TEXT_PRIMARY,
+            insertbackground=Colors.TEXT_PRIMARY,
+            relief="solid", bd=1, width=30, show="*",
+        )
+        key_entry.pack(side="right", padx=(8, 0))
+
     def _set_window_icon(self) -> None:
         icon_path = Path("icon.ico")
         if not icon_path.exists():
@@ -181,13 +264,34 @@ class CoachApp(tk.Tk):
 
     def _run_session(self) -> None:
         data_dragon = DataDragonClient()
+        options = self._current_session_options()
+
+        if options.use_ai_build:
+            groq_key = self._groq_key_var.get()
+            # IA adapta builds do OP.GG (não Deeplol)
+            base_provider = OpggBuildProvider(data_dragon=data_dragon)
+            build_provider = AiBuildProvider(
+                base_provider=base_provider,
+                data_dragon=data_dragon,
+                api_key=groq_key,
+                tone=options.tone,
+                mode=options.mode,
+            )
+        else:
+            # Determinístico: usa OP.GG diretamente (sem adaptação IA)
+            build_provider = OpggBuildProvider(data_dragon=data_dragon)
+
         build_loader = BuildLoader(
             build_service=RecommendedBuildService(
-                build_provider=DeeplolBuildProvider(data_dragon=data_dragon),
+                build_provider=build_provider,
                 data_dragon=data_dragon,
             ),
             data_dragon=data_dragon,
         )
+
+        # Injetar AiBuildProvider se em modo IA (para receber dados de inimigos)
+        if options.use_ai_build and isinstance(build_provider, AiBuildProvider):
+            build_loader.set_ai_provider(build_provider)
 
         speaker = EdgeTtsSpeaker()
         speech_queue = SpeechPriorityQueue(
@@ -198,7 +302,7 @@ class CoachApp(tk.Tk):
             data_source=LiveClientDataApi(),
             speech_queue=speech_queue,
             build_loader=build_loader,
-            options=self._current_session_options(),
+            options=options,
             callbacks=SessionCallbacks(
                 on_status_change=self._handle_status_change,
                 on_log_message=self._log_queue.put,
@@ -210,6 +314,21 @@ class CoachApp(tk.Tk):
         session.run(self._stop_signal)
 
     def _current_session_options(self) -> SessionOptions:
+        tone_label = self._tone_var.get()
+        tone_map = {
+            UILabels.CONFIG_TONE_NEUTRAL: "neutral",
+            UILabels.CONFIG_TONE_FUNNY: "funny",
+            UILabels.CONFIG_TONE_SERIOUS: "serious",
+        }
+        tone = tone_map.get(tone_label, "neutral")
+
+        mode_label = self._mode_var.get()
+        mode_map = {
+            UILabels.CONFIG_MODE_SIMPLE: "simple",
+            UILabels.CONFIG_MODE_EXPLANATORY: "explanatory",
+        }
+        mode = mode_map.get(mode_label, "simple")
+
         return SessionOptions(
             skill_points=self._toggles.skill_points.get(),
             objectives=self._toggles.objectives.get(),
@@ -217,6 +336,10 @@ class CoachApp(tk.Tk):
             next_item=self._toggles.next_item.get(),
             minimap=self._toggles.minimap.get(),
             trinket=self._toggles.trinket.get(),
+            farm=self._toggles.farm.get(),
+            tone=tone,
+            mode=mode,
+            use_ai_build=self._toggles.ai_build.get(),
         )
 
     # ── Callbacks vindos da thread da sessão ─────────────────────────────────

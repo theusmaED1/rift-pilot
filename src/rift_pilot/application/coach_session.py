@@ -1,16 +1,23 @@
 """Orquestrador do loop principal: lê o estado da partida e dispara avisos."""
 from __future__ import annotations
 
+import json
+import logging
 import threading
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum, auto
-from typing import Callable
+from pathlib import Path
+from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
 
 from rift_pilot.application.build_loader import BuildLoader
 from rift_pilot.application.session_options import SessionOptions
 from rift_pilot.domain.detectors.build_announcer import build_announcement_event
 from rift_pilot.domain.detectors.event_detector import EventDetector
+from rift_pilot.domain.detectors.farm_detector import FarmDetector
 from rift_pilot.domain.detectors.next_item_detector import NextItemDetector
 from rift_pilot.domain.detectors.minimap_reminder_detector import MinimapReminderDetector
 from rift_pilot.domain.detectors.trinket_reminder_detector import TrinketReminderDetector
@@ -83,6 +90,12 @@ class CoachSession:
         self._game_started = False
         self._detectors_unlocked = False
 
+        # Game recording for analysis
+        self._recordings_dir = Path("recordings")
+        self._recordings_dir.mkdir(exist_ok=True)
+        self._log_file: Any = None
+        self._log_path: Path | None = None
+
     def run(self, stop_signal: threading.Event) -> None:
         detectors = self._build_detectors()
 
@@ -97,6 +110,7 @@ class CoachSession:
             try:
                 payload = self._data_source.get_all_data()
                 current_state = GameState.from_live_api(payload)
+                self._log_game_tick(payload)
             except GameLoading:
                 consecutive_failures = 0
                 if not loading_screen_signaled:
@@ -128,8 +142,17 @@ class CoachSession:
 
             if not build_fetch_requested and current_state.champion_name:
                 build_fetch_requested = True
+
+                # Injetar dados de inimigos para modo IA
+                if self._options.use_ai_build:
+                    lane_enemy = self._extract_lane_enemy(payload, current_state)
+                    full_comp = self._extract_enemy_comp(payload, current_state)
+                    self._build_loader.inject_enemies(lane_enemy, full_comp)
+
                 resolved_position = resolve_position_for_build_lookup(
-                    current_state.position, current_state.has_smite
+                    current_state.position,
+                    current_state.has_smite,
+                    team_positions=current_state.all_player_positions,
                 )
                 self._build_loader.fetch_in_background(
                     champion_name=current_state.champion_name,
@@ -143,15 +166,61 @@ class CoachSession:
                 )
 
             if not self._game_started:
+                logger.info(f"[CoachSession] Game iniciado! champion={current_state.champion_name}, position={current_state.position}")
                 self._game_started = True
                 self._callbacks.on_status_change(SessionStatus.MONITORING)
                 unlock_deadline = current_state.game_time_seconds + 10.0
+                self._init_game_recording()
+
+                # Anunciar início do Rift Pilot
+                startup_events: list[CoachEvent] = [
+                    CoachEvent(
+                        message="Rift Pilot pronto!",
+                        priority=EventPriority.BUILD_ANNOUNCE,
+                    )
+                ]
+
+                # Anunciar campeão, lane e starter items
+                champion_name = current_state.champion_name or "Campeão desconhecido"
+                champion_msg = f"Jogando de {champion_name}"
+                if current_state.position and current_state.position != "NONE":
+                    champion_msg += f" na {self._position_name(current_state.position)}"
+                startup_events.append(
+                    CoachEvent(
+                        message=champion_msg,
+                        priority=EventPriority.BUILD_ANNOUNCE,
+                    )
+                )
+
                 with self._pending_build_lock:
                     if self._pending_build is not None:
+                        logger.info(f"[CoachSession] Pending build encontrada: {self._pending_build.champion}")
+                        if self._pending_build.starter_items:
+                            starter_msg = f"Starter: {', '.join(self._pending_build.starter_items)}"
+                            logger.info(f"[CoachSession] Adicionando starter announcement: {starter_msg}")
+                            startup_events.append(
+                                CoachEvent(
+                                    message=starter_msg,
+                                    priority=EventPriority.BUILD_ANNOUNCE,
+                                )
+                            )
                         if self._options.build_announce and self._pending_build.is_complete:
+                            logger.info(f"[CoachSession] Build complete, anunciando build announcement")
                             event = build_announcement_event(self._pending_build)
-                            self._speech_queue.enqueue([event])
+                            startup_events.append(event)
                         self._detectors_unlocked = True
+                    else:
+                        # Build ainda não carregou — anuncia aviso
+                        logger.warning(f"[CoachSession] Pending build é None, anunciando aviso de carregamento")
+                        startup_events.append(
+                            CoachEvent(
+                                message="Carregando build recomendada...",
+                                priority=EventPriority.BUILD_ANNOUNCE,
+                            )
+                        )
+
+                logger.info(f"[CoachSession] Enfileirando {len(startup_events)} startup events")
+                self._speech_queue.enqueue(startup_events)
 
             if not self._detectors_unlocked:
                 if unlock_deadline and current_state.game_time_seconds >= unlock_deadline:
@@ -165,8 +234,33 @@ class CoachSession:
 
         self._speech_queue.clear()
         self._data_source.close()
+        self._close_game_recording()
 
     # ── Helpers ──────────────────────────────────────────────────────────────
+
+    def _init_game_recording(self) -> None:
+        """Initialize game recording file."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self._log_path = self._recordings_dir / f"game_{timestamp}.jsonl"
+        self._log_file = self._log_path.open("w", encoding="utf-8")
+
+    def _log_game_tick(self, payload: dict[str, Any]) -> None:
+        """Log a single game tick."""
+        if self._log_file is None:
+            return
+        try:
+            self._log_file.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            self._log_file.flush()
+        except Exception:
+            pass
+
+    def _close_game_recording(self) -> None:
+        """Close the game recording file."""
+        if self._log_file is not None:
+            try:
+                self._log_file.close()
+            except Exception:
+                pass
 
     def _build_detectors(self) -> list[EventDetector]:
         detectors: list[EventDetector] = []
@@ -181,6 +275,8 @@ class CoachSession:
             detectors.append(MinimapReminderDetector())
         if self._options.trinket:
             detectors.append(TrinketReminderDetector())
+        if self._options.farm:
+            detectors.append(FarmDetector(tone=self._options.tone))
         return detectors
 
     def _process_tick(
@@ -222,16 +318,141 @@ class CoachSession:
             self._next_item_detector = detector
 
     def _handle_build_loaded(self, build: RecommendedBuild) -> None:
+        logger.info(f"[CoachSession] _handle_build_loaded: {build.champion} - is_complete={build.is_complete}, ai_messages={bool(build.ai_messages)}")
+        logger.info(f"[CoachSession]   starter_items={build.starter_items}, core_items={build.core_items}, boots={build.boots}")
         self._current_build = build
         self._callbacks.on_build_loaded(build)
         with self._pending_build_lock:
             if not self._game_started:
+                logger.info(f"[CoachSession] Game ainda não começou (_game_started={self._game_started}), guardando build como pending")
                 self._pending_build = build
                 return
+            logger.info(f"[CoachSession] Game já começou (_game_started={self._game_started}), verificando se deve anunciar")
+            logger.info(f"[CoachSession]   build_announce={self._options.build_announce}, is_complete={build.is_complete}")
             if self._options.build_announce and build.is_complete:
-                event = build_announcement_event(build)
-                self._speech_queue.enqueue([event])
+                # Modo IA: usar mensagens geradas pela IA
+                if build.ai_messages:
+                    logger.info(f"[CoachSession] >>>>>> MODO IA DETECTADO <<<<<<")
+                    events: list[CoachEvent] = []
+                    if "starter" in build.ai_messages:
+                        logger.info(f"[CoachSession] Adicionando starter message")
+                        events.append(
+                            CoachEvent(
+                                message=build.ai_messages["starter"],
+                                priority=EventPriority.BUILD_ANNOUNCE,
+                            )
+                        )
+                    if "core" in build.ai_messages:
+                        logger.info(f"[CoachSession] Adicionando core message")
+                        events.append(
+                            CoachEvent(
+                                message=build.ai_messages["core"],
+                                priority=EventPriority.BUILD_ANNOUNCE,
+                            )
+                        )
+                    if "boots" in build.ai_messages:
+                        logger.info(f"[CoachSession] Adicionando boots message")
+                        events.append(
+                            CoachEvent(
+                                message=build.ai_messages["boots"],
+                                priority=EventPriority.BUILD_ANNOUNCE,
+                            )
+                        )
+                    if events:
+                        logger.info(f"[CoachSession] >>>>>> ENFILEIRANDO {len(events)} EVENTOS DE IA <<<<<<")
+                        self._speech_queue.enqueue(events)
+                    else:
+                        logger.warning(f"[CoachSession] Nenhum evento de IA criado (ai_messages vazio?)")
+                else:
+                    # Modo determinístico: usar template fixo
+                    logger.info(f"[CoachSession] >>>>>> MODO DETERMINÍSTICO - ANUNCIANDO BUILD <<<<<<")
+                    event = build_announcement_event(build)
+                    logger.info(f"[CoachSession] Evento: {event.message}")
+                    self._speech_queue.enqueue([event])
+                    logger.info(f"[CoachSession] >>>>>> BUILD ENFILEIRADA <<<<<<<<")
+            else:
+                if not self._options.build_announce:
+                    logger.info(f"[CoachSession] Não anunciando: build_announce=False")
+                if not build.is_complete:
+                    logger.info(f"[CoachSession] Não anunciando: build não está completa (is_complete={build.is_complete})")
+                    logger.info(f"[CoachSession]   Para is_complete ser True precisa: starter_items AND core_items AND boots")
+                    logger.info(f"[CoachSession]   Tem starter? {bool(build.starter_items)}, Tem core? {bool(build.core_items)}, Tem boots? {bool(build.boots)}")
             self._detectors_unlocked = True
+
+    def _position_name(self, position: str) -> str:
+        """Converte código de posição para nome legível."""
+        names = {
+            "TOP": "Top lane",
+            "JUNGLE": "Jungle",
+            "MIDDLE": "Mid lane",
+            "BOTTOM": "Bot lane",
+            "UTILITY": "Suporte",
+        }
+        return names.get(position, position)
+
+    def _extract_lane_enemy(self, payload: dict[str, Any], state: GameState) -> dict[str, Any] | None:
+        """Extrai o campeão inimigo de mesma posição do payload da Live API."""
+        if not state.position or state.position == "NONE":
+            logger.warning(f"[CoachSession] extract_lane_enemy: position inválida ({state.position})")
+            return None
+
+        all_players = payload.get("allPlayers", [])
+        active = payload.get("activePlayer", {}) or {}
+
+        # Encontrar meu time com fallback
+        my_identifier = active.get("riotId") or active.get("summonerName")
+        if not my_identifier:
+            logger.warning(f"[CoachSession] Não conseguiu identificar activePlayer")
+            return None
+
+        my_team = None
+        for p in all_players:
+            player_id = p.get("riotId") or p.get("summonerName")
+            if player_id == my_identifier:
+                my_team = p.get("team")
+                break
+
+        logger.info(f"[CoachSession] extract_lane_enemy: my_team={my_team}, my_position={state.position}")
+        if my_team is None:
+            logger.warning(f"[CoachSession] Não conseguiu encontrar meu time no allPlayers")
+            return None
+
+        # Procurar inimigo na mesma posição
+        for player in all_players:
+            player_team = player.get("team")
+            player_pos = player.get("position")
+            logger.debug(f"[CoachSession]   player: team={player_team}, pos={player_pos}, champ={player.get('championName')}")
+
+            if (player_team and player_team != my_team and player_pos == state.position):
+                enemy = {
+                    "championName": player.get("championName", "?"),
+                    "level": player.get("level", 0),
+                }
+                logger.info(f"[CoachSession] Lane enemy encontrado: {enemy}")
+                return enemy
+
+        logger.warning(f"[CoachSession] Nenhum inimigo de lane encontrado para posição {state.position}")
+        return None
+
+    def _extract_enemy_comp(self, payload: dict[str, Any], state: GameState) -> list[dict[str, Any]]:
+        """Extrai lista de campeões inimigos do payload."""
+        all_players = payload.get("allPlayers", [])
+        active = payload.get("activePlayer", {}) or {}
+        my_team = next(
+            (p.get("team") for p in all_players
+             if (p.get("riotId") or p.get("summonerName", "")) ==
+                 (active.get("riotId") or active.get("summonerName", ""))),
+            None,
+        )
+
+        enemies = []
+        for player in all_players:
+            if player.get("team") != my_team and player.get("team") is not None:
+                enemies.append({
+                    "championName": player.get("championName", "?"),
+                    "level": player.get("level", 0),
+                })
+        return enemies
 
     def _check_quest_completion(self, diff: StateDiff) -> None:
         build = self._current_build
